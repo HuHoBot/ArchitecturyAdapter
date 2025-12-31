@@ -437,6 +437,7 @@ tasks.register<Copy>("gatherJars") {
     
     // 拷贝到目标目录
     into(targetDir)
+    println("Gathered jars copied to: $targetDir")
 }
 
 // 修改customBuild任务，使其依赖于gatherJars任务

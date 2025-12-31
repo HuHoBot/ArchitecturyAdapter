@@ -177,6 +177,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
                 if (value !is Map<*, *>) {
                     return null
                 }
+                @Suppress("UNCHECKED_CAST")
                 current = value as Map<String, Any>
             } else {
                 return value

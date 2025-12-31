@@ -1,15 +1,15 @@
 modLoader = "kotlinforforge"
-loaderVersion = "[4,)"
+loaderVersion = "[1,)"
 #issueTrackerURL = ""
-license = "Insert License Here"
+license = "GPL3"
 
 [[mods]]
 modId = "${mod_id}"
 version = "${version}"
-displayName = "Example Mod"
-authors = "Me!"
+displayName = "HuHoBot"
+authors = "HuoHuas001"
 description = '''
-This is an example description! Tell everyone what your mod is about!
+HuHoBot for Forge enabling the official QQ bot to connect to your server.
 '''
 #logoFile = ""
 
@@ -37,6 +37,6 @@ side = "BOTH"
 [[dependencies.${mod_id}]]
 modId = "kotlinforforge"
 mandatory = true
-versionRange = "[${kotlin_for_forge_version}]"
+versionRange = "[${kotlin_for_forge_version},)"
 ordering = "AFTER"
 side = "BOTH"

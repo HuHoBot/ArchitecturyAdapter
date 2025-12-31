@@ -37,7 +37,7 @@
   jvm_version: "17"
 
 1.20.5:
-  neoforge_version: "20.5.21-beta"
+  neoforge_version: "20.5.21"
   architectury_version: "12.0.29"
   kotlin_for_forge_version: "5.0.2"
   fabric_loader_version: "0.16.5"

@@ -75,7 +75,18 @@ tasks.processResources {
 
 tasks.shadowJar {
     exclude("architectury.common.json")
+    exclude("fabric.mod.json")
+    exclude("kotlin/**")
+    exclude("org/jetbrains/**")
+    exclude("META-INF/*.kotlin_module")
+    exclude("org/slf4j/**")
+    exclude("META-INF/services/org.slf4j.*")
     configurations = listOf(shadowCommon)
+    
+    relocate("kotlinx.coroutines", "huhobot.shadow.kotlinx.coroutines")
+    relocate("kotlinx.serialization", "huhobot.shadow.kotlinx.serialization")
+    relocate("org.yaml.snakeyaml", "huhobot.shadow.org.yaml.snakeyaml")
+    
     archiveFileName.set("${base.archivesName.get()}-${project.version}-Fabric_devShadow.jar")
 }
 

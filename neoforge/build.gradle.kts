@@ -107,6 +107,7 @@ if (isAtLeast1204) {
         
         relocate("kotlinx.coroutines", "huhobot.shadow.kotlinx.coroutines")
         relocate("kotlinx.serialization", "huhobot.shadow.kotlinx.serialization")
+        relocate("org.yaml.snakeyaml", "huhobot.shadow.org.yaml.snakeyaml")
         
         archiveFileName.set("${base.archivesName.get()}-${project.version}-NeoForge_devShadow.jar")
     }
