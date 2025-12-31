@@ -8,7 +8,7 @@ architectury {
 }
 
 loom {
-    accessWidenerPath.set(project(":server-Architectury:common").loom.accessWidenerPath)
+    accessWidenerPath.set(project(":common").loom.accessWidenerPath)
 
     forge.apply {
         convertAccessWideners.set(true)
@@ -40,8 +40,8 @@ dependencies {
     // Remove the next line if you don't want to depend on the API
     modApi("dev.architectury:architectury-forge:${project.property("architectury_version")}")
 
-    common(project(":server-Architectury:common", "namedElements")) { isTransitive = false }
-    shadowCommon(project(":server-Architectury:common", "transformProductionForge")) { isTransitive = false }
+    common(project(":common", "namedElements")) { isTransitive = false }
+    shadowCommon(project(":common", "transformProductionForge")) { isTransitive = false }
     shadowCommon("org.yaml:snakeyaml:2.5")
 
     shadowCommon("io.ktor:ktor-client-websockets:1.6.8")
@@ -51,7 +51,7 @@ dependencies {
     }
 
     shadowCommon("com.alibaba.fastjson2:fastjson2:2.0.52")
-    shadowCommon(project(":common-Bot")) { isTransitive = false }
+    shadowCommon(project(":botSdk:common-Bot")) { isTransitive = false }
 
     // Kotlin For Forge
     implementation("thedarkcolour:kotlinforforge:${project.property("kotlin_for_forge_version")}")
@@ -93,7 +93,7 @@ tasks.jar {
 }
 
 tasks.sourcesJar {
-    val commonSources = project(":server-Architectury:common").tasks.getByName<Jar>("sourcesJar")
+    val commonSources = project(":common").tasks.getByName<Jar>("sourcesJar")
     dependsOn(commonSources)
     from(commonSources.archiveFile.map { zipTree(it) })
 }

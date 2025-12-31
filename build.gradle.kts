@@ -2,10 +2,10 @@ import net.fabricmc.loom.api.LoomGradleExtensionAPI
 
 plugins {
     java
-    kotlin("jvm")
+    kotlin("jvm") version "2.2.0"
     id("architectury-plugin") version "3.4-SNAPSHOT"
     id("dev.architectury.loom") version "1.10-SNAPSHOT" apply false
-    id("com.gradleup.shadow")
+    id("com.gradleup.shadow") version "9.2.2"
 }
 
 architectury {
@@ -29,47 +29,50 @@ subprojects {
     }
 }
 
-allprojects {
-    apply(plugin = "java")
-    apply(plugin = "kotlin")
-    apply(plugin = "architectury-plugin")
-    apply(plugin = "maven-publish")
+// 只对主项目的子项目应用配置，不包括botSdk子项目
+val mainSubprojects = listOf(":common", ":fabric", ":forge", ":neoforge")
+mainSubprojects.forEach { projectPath ->
+    project(projectPath) {
+        apply(plugin = "java")
+        apply(plugin = "kotlin")
+        apply(plugin = "architectury-plugin")
+        apply(plugin = "maven-publish")
 
-    base.archivesName.set(project.property("archives_base_name").toString())
-    //base.archivesBaseName = rootProject.property("archives_base_name").toString()
-    group = project.property("maven_group").toString()
+        base.archivesName.set(property("archives_base_name").toString())
+        group = property("maven_group").toString()
 
-    repositories {
-        mavenCentral()
-    }
-
-    dependencies {
-        compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
-        implementation(project(":common-Bot"))
-        // https://mvnrepository.com/artifact/org.yaml/snakeyaml
-        implementation("org.yaml:snakeyaml:2.5")
-        implementation(group = "com.alibaba.fastjson2", name = "fastjson2", version = "2.0.52")
-        implementation("io.ktor:ktor-client-websockets:1.6.8")
-        implementation("io.ktor:ktor-client-cio:1.6.8")
-        implementation("io.ktor:ktor-client-core:1.6.8") {
-            exclude(group = "org.slf4j")
-            exclude(group = "org.yaml")
+        repositories {
+            mavenCentral()
         }
 
-        implementation("com.alibaba.fastjson2:fastjson2:2.0.52") {
-            exclude(group = "org.jetbrains")
+        dependencies {
+            compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
+            implementation(project(":botSdk:common-Bot"))
+            // https://mvnrepository.com/artifact/org.yaml/snakeyaml
+            implementation("org.yaml:snakeyaml:2.5")
+            implementation(group = "com.alibaba.fastjson2", name = "fastjson2", version = "2.0.52")
+            implementation("io.ktor:ktor-client-websockets:1.6.8")
+            implementation("io.ktor:ktor-client-cio:1.6.8")
+            implementation("io.ktor:ktor-client-core:1.6.8") {
+                exclude(group = "org.slf4j")
+                exclude(group = "org.yaml")
+            }
+
+            implementation("com.alibaba.fastjson2:fastjson2:2.0.52") {
+                exclude(group = "org.jetbrains")
+            }
         }
-    }
 
-    tasks.withType<JavaCompile> {
-        options.encoding = "UTF-8"
-        options.release.set(17)
-    }
+        tasks.withType<JavaCompile> {
+            options.encoding = "UTF-8"
+            options.release.set(17)
+        }
 
-    java {
-        withSourcesJar()
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
+        java {
+            withSourcesJar()
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(17)
+            }
         }
     }
 }
