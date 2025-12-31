@@ -1,5 +1,8 @@
+// 获取当前的enabled_platforms，确保使用正确的平台配置
+val enabledPlatforms = project.properties["enabled_platforms"].toString().split(",")
+
 architectury {
-    common(project.property("enabled_platforms").toString().split(","))
+    common(enabledPlatforms)
 }
 
 loom {

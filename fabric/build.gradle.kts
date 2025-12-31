@@ -2,6 +2,9 @@ plugins {
     id("com.gradleup.shadow")
 }
 
+// 设置项目版本为根项目的版本
+version = rootProject.version
+
 repositories {
     mavenCentral()
     maven {
@@ -73,14 +76,15 @@ tasks.processResources {
 tasks.shadowJar {
     exclude("architectury.common.json")
     configurations = listOf(shadowCommon)
-    archiveFileName.set("HuHoBot-${project.version}-Fabric_devShadow.jar")
+    archiveFileName.set("${base.archivesName.get()}-${project.version}-Fabric_devShadow.jar")
 }
 
 tasks.remapJar {
     injectAccessWidener.set(true)
     inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
     dependsOn(tasks.shadowJar)
-    archiveFileName.set("HuHoBot-${project.version}-Fabric.jar")
+    // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
+    archiveFileName.set("HuHoBot-${version}-Fabric-${project.property("minecraft_version")}.jar")
 }
 
 tasks.jar {
