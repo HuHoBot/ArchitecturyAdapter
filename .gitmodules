@@ -1,0 +1,3 @@
+[submodule "botSdk"]
+	path = botSdk
+	url = git@github.com:HuHoBot/KotlinMergeAdapter.git
