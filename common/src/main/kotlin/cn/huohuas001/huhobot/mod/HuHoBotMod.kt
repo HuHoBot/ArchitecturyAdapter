@@ -6,7 +6,7 @@ import cn.huohuas001.bot.events.BaseEvent
 import cn.huohuas001.bot.events.BindRequest
 import cn.huohuas001.bot.provider.ChatFormat
 import cn.huohuas001.bot.provider.Motd
-import cn.huohuas001.bot.providers.HExecution
+import cn.huohuas001.bot.provider.HExecution
 import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.huhobot.mod.events.QueryAllowList
 import cn.huohuas001.huhobot.mod.events.QueryOnline
@@ -58,9 +58,8 @@ object HuHoBotMod: HuHoBot {
             commandManager = CommandManager(this)
             commandManager.registerCommands(serverInstance.commands.dispatcher)
 
-            //启动调度器
+            //初始化调度器
             scheduler = HuHoBotScheduler(this)
-            scheduler.startScheduler()
 
             enableBot()
         }
@@ -71,6 +70,7 @@ object HuHoBotMod: HuHoBot {
     }
 
     fun disable(){
+        scheduler.shutdown()
         ClientManager.setShouldReconnect(false)
         ClientManager.shutdownClient()
     }

@@ -1,105 +1,63 @@
 package cn.huohuas001.huhobot.mod.tools
+
 import cn.huohuas001.bot.tools.Cancelable
 import cn.huohuas001.huhobot.mod.HuHoBotMod
-import net.minecraft.server.MinecraftServer
-import org.apache.logging.log4j.Logger
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.*
 
 class HuHoBotScheduler(private val plugin: HuHoBotMod) {
 
-    val logger: Logger = plugin.LOGGER
-    val server: MinecraftServer = plugin.serverInstance
-    var taskList: MutableMap<Long, ScheduledTask> = ConcurrentHashMap()
-    val taskIdGenerator = AtomicLong(0)
+    private val logger = plugin.LOGGER
 
-    fun startScheduler() {
-        val tickThread = Thread({
-            while (!server.isStopped) {
-                try {
-                    processTasks()
-                    Thread.sleep(50) // 1 Tick  50ms
-                } catch (ignored: InterruptedException) {}
-            }
-        }, "HuHoBotScheduler-Thread")
-        tickThread.isDaemon = true // 守护线程，不阻止 JVM 退出
-        tickThread.start()
-    }
-
-    private fun processTasks() {
-        val iterator = taskList.entries.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            val task = entry.value
-
-            if (task.isCancelled) {
-                iterator.remove()
-                continue
-            }
-
-            task.ticksLeft--
-            if (task.ticksLeft <= 0) {
-                try {
-                    task.runnable.run()
-                } catch (e: Exception) {
-                    logger.error("任务执行异常", e)
-                }
-
-                if (task.isLoop) {
-                    task.ticksLeft = task.intervalTicks.toLong()
-                } else {
-                    iterator.remove()
-                }
-            }
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, throwable ->
+            logger.error("调度器任务执行异常", throwable)
         }
+    )
+
+    companion object {
+        private const val TICK_MS = 50L
     }
 
-    class ScheduledTask internal constructor(
-        private val id: Long,
-        val runnable: Runnable,
-        delayTicks: Long,
-        val intervalTicks: Int,
-        val isLoop: Boolean
-    ): Cancelable {
-        @Volatile
-        var ticksLeft: Long = delayTicks
-
-        @Volatile
-        private var cancelled = false
-
-        override fun cancel() {
-            this.cancelled = true
-        }
-
-        val isCancelled: Boolean
-            get() = cancelled
+    fun shutdown() {
+        scope.cancel()
     }
-
 
     // 一次性延迟任务
-    fun runTaskLater(task: Runnable, delayTicks: Long): ScheduledTask {
-        val taskId = taskIdGenerator.incrementAndGet()
-        val scheduled = ScheduledTask(taskId, task, delayTicks, 0, false)
-        taskList[taskId] = scheduled
-        return scheduled
+    fun runTaskLater(task: Runnable, delayTicks: Long): Cancelable {
+        val job = scope.launch {
+            delay(delayTicks * TICK_MS)
+            task.run()
+        }
+        return JobCancelable(job)
     }
 
     // 循环任务
-    fun runDelayedLoop(task: Runnable, delayTicks: Long, intervalTicks: Int): ScheduledTask {
-        val taskId = taskIdGenerator.incrementAndGet()
-        val scheduled = ScheduledTask(taskId, task, delayTicks, intervalTicks, true)
-        taskList[taskId] = scheduled
-        return scheduled
+    fun runDelayedLoop(task: Runnable, delayTicks: Long, intervalTicks: Int): Cancelable {
+        val job = scope.launch {
+            delay(delayTicks * TICK_MS)
+            while (isActive) {
+                task.run()
+                delay(intervalTicks * TICK_MS)
+            }
+        }
+        return JobCancelable(job)
     }
 
-    fun runDelayedLoop(task: Runnable, delayTicks: Long): ScheduledTask {
-        return runDelayedLoop(task, delayTicks, 20) // 默认间隔20 ticks (1秒)
+    fun runDelayedLoop(task: Runnable, delayTicks: Long): Cancelable {
+        return runDelayedLoop(task, delayTicks, 20)
     }
 
-    // 立即执行
-    fun runTask(task: Runnable) {
-        if (!server.isStopped) {
-            server.submit(task)
+    // 立即在子线程执行
+    fun runTask(task: Runnable): Cancelable {
+        val job = scope.launch {
+            task.run()
+        }
+        return JobCancelable(job)
+    }
+
+    private class JobCancelable(private val job: Job) : Cancelable {
+        override fun cancel() {
+            job.cancel()
         }
     }
 }

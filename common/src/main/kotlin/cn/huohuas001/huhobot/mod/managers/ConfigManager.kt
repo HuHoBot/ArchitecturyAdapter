@@ -55,7 +55,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
         }
 
         try {
-            val defaultConfigStream = mod.javaClass.getResourceAsStream("/config.yml")
+            val defaultConfigStream = mod.javaClass.getResourceAsStream("/huhobot/config.yml")
             if (defaultConfigStream == null) {
                 logger.error("默认配置文件不存在！请在resources目录下创建config.yml")
                 return

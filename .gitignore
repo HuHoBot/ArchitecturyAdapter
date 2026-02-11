@@ -2,6 +2,7 @@
 .gradle/
 build/
 outputs/
+.claude/
 
 # IDE
 .idea/

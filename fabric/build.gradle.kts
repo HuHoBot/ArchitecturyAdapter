@@ -74,8 +74,6 @@ tasks.processResources {
 }
 
 tasks.shadowJar {
-    exclude("architectury.common.json")
-    exclude("fabric.mod.json")
     exclude("kotlin/**")
     exclude("org/jetbrains/**")
     exclude("META-INF/*.kotlin_module")
