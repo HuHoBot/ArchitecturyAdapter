@@ -149,6 +149,19 @@ architectury {
     minecraft = fullMinecraftVersion
 }
 
+// 用版本矩阵的值覆盖所有子项目的属性，确保不受 gradle.properties 的旧值影响
+allprojects {
+    ext["minecraft_version"] = fullMinecraftVersion
+    ext["enabled_platforms"] = enabledPlatforms
+    ext["forge_version"] = forgeVersion
+    ext["neoforge_version"] = neoforgeVersion
+    ext["architectury_version"] = architecturyVersion
+    ext["kotlin_for_forge_version"] = kotlinForForgeVersion
+    ext["fabric_loader_version"] = fabricLoaderVersion
+    ext["fabric_api_version"] = fabricApiVersion
+    ext["fabric_kotlin_version"] = fabricKotlinVersion
+}
+
 // 只对主项目的子项目应用配置，不包括botSdk子项目
 val mainSubprojects = mutableListOf(":common", ":fabric")
 
