@@ -36,7 +36,9 @@ jobs:
 
       # Build 1.20.1 (Fabric + Forge)
       - name: Build 1.20.1 (Fabric + Forge)
-        run: ./gradlew clean customBuild -Pminecraft_version=1.20.1
+        env:
+          WS_SERVER_URL: ${{ secrets.WS_SERVER_URL }}
+        run: ./gradlew clean customBuild -Pminecraft_version=1.20.1 -PwsServerUrl="$WS_SERVER_URL"
 
       - name: Collect 1.20.1 jars
         run: |
@@ -48,7 +50,9 @@ jobs:
 
       # Build 1.20.4 (NeoForge)
       - name: Build 1.20.4 (Fabric + NeoForge)
-        run: ./gradlew clean customBuild -Pminecraft_version=1.20.4
+        env:
+          WS_SERVER_URL: ${{ secrets.WS_SERVER_URL }}
+        run: ./gradlew clean customBuild -Pminecraft_version=1.20.4 -PwsServerUrl="$WS_SERVER_URL"
 
       - name: Collect 1.20.4 jars
         run: |
