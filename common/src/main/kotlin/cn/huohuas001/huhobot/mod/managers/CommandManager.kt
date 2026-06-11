@@ -1,5 +1,6 @@
 package cn.huohuas001.huhobot.mod.managers
 
+import cn.huohuas001.huhobot.mod.commands.CommandOutputAppender
 import cn.huohuas001.huhobot.mod.HuHoBotMod
 import com.mojang.brigadier.CommandDispatcher
 import com.mojang.brigadier.arguments.ArgumentType
@@ -7,16 +8,14 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.context.CommandContext
-import dev.architectury.event.events.common.CommandRegistrationEvent
-import net.minecraft.commands.CommandSource
 import net.minecraft.commands.CommandSourceStack
 import org.apache.logging.log4j.Logger
 import java.util.function.Consumer
 
 
 class CommandManager(private val plugin: HuHoBotMod) {
-    private val commandCallbacks = mutableListOf<Consumer<CommandResult>>()
     private var logger: Logger = plugin.LOGGER
+    private val appender = CommandOutputAppender.getInstance()
 
     fun literal(name: String): LiteralArgumentBuilder<CommandSourceStack> {
         return LiteralArgumentBuilder.literal<CommandSourceStack>(name)
@@ -59,7 +58,6 @@ class CommandManager(private val plugin: HuHoBotMod) {
         plugin.reloadBotConfig()
         logger.info("§b重载机器人配置文件成功.")
 
-        triggerCallbacks(CommandResult("huhobot reload", "", getName(), true))
         return 1
     }
 
@@ -72,7 +70,6 @@ class CommandManager(private val plugin: HuHoBotMod) {
             logger.warn("§c重连机器人失败：已在连接状态.")
         }
 
-        triggerCallbacks(CommandResult("huhobot reconnect", "", getName(), success))
         return 1
     }
 
@@ -83,7 +80,6 @@ class CommandManager(private val plugin: HuHoBotMod) {
             logger.warn("§6已断开机器人连接.")
         }
 
-        triggerCallbacks(CommandResult("huhobot disconnect", "", getName(), success))
         return 1
     }
 
@@ -98,7 +94,6 @@ class CommandManager(private val plugin: HuHoBotMod) {
             logger.error("§c绑定码错误，请重新输入.")
         }
 
-        triggerCallbacks(CommandResult("huhobot bind", code, getName(), success))
         return 1
     }
 
@@ -116,28 +111,37 @@ class CommandManager(private val plugin: HuHoBotMod) {
         return "HuHoBot"
     }
 
+    fun cleanup() {
+        CommandOutputAppender.removeInstance()
+    }
+
     // 外部执行命令并提供回调
     fun executeCommand(command: String, callback: Consumer<CommandResult>) {
-        commandCallbacks.add(callback)
         val server = plugin.serverInstance
 
         server.execute {
+            appender.startCapture()
             try {
                 val source = server.createCommandSourceStack()
-                server.commands.dispatcher.execute(command,source)
-                callback.accept(CommandResult(command, "Command executed", "System", true))
+                val result = server.commands.dispatcher.execute(command,source)
+                plugin.submitLater(40L) {
+                    val output = appender.stopCapture()
+                        .map(::filterLogOutput)
+                        .distinct()
+                        .joinToString("\n")
+                    val resultText = output.ifBlank { "Command executed" }
+                    callback.accept(CommandResult(command, resultText, "System", result > 0))
+                }
             } catch (e: Exception) {
+                appender.stopCapture()
                 callback.accept(CommandResult(command, "Error: ${e.message}", "System", false))
-            } finally {
-                commandCallbacks.remove(callback)
             }
         }
     }
 
-    private fun triggerCallbacks(result: CommandResult) {
-        val callbacks = commandCallbacks.toList()
-        for (callback in callbacks) {
-            callback.accept(result)
+    private fun filterLogOutput(message: String): String {
+        return plugin.config.getFilterRegex().fold(message) { filtered, regex ->
+            regex.replace(filtered, "")
         }
     }
 

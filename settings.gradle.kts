@@ -154,10 +154,8 @@ if (isBefore1204) {
     include(":neoforge")
 }
 
-// 包含botSdk目录作为子项目
-include(":botSdk")
-project(":botSdk").projectDir = file("./botSdk")
-
 // 包含botSdk/common/Bot模块
 include(":botSdk:common-Bot")
+project(":botSdk").projectDir = file("./botSdk")
+project(":botSdk").buildFileName = "empty.gradle.kts"
 project(":botSdk:common-Bot").projectDir = file("./botSdk/common/Bot")

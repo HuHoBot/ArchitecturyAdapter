@@ -21,6 +21,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import org.apache.logging.log4j.LogManager
 import org.apache.logging.log4j.Logger
+import java.io.File
 import java.util.concurrent.CompletableFuture
 
 object HuHoBotMod: HuHoBot {
@@ -70,7 +71,12 @@ object HuHoBotMod: HuHoBot {
     }
 
     fun disable(){
-        scheduler.shutdown()
+        if (::commandManager.isInitialized) {
+            commandManager.cleanup()
+        }
+        if (::scheduler.isInitialized) {
+            scheduler.shutdown()
+        }
         ClientManager.setShouldReconnect(false)
         ClientManager.shutdownClient()
     }
@@ -113,6 +119,10 @@ object HuHoBotMod: HuHoBot {
         return config.getMotd()
     }
 
+    override fun getConfigFile(): File {
+        return config.getConfigFile()
+    }
+
     override fun getServerId(): String {
         return config.getServerId()
     }
@@ -151,13 +161,21 @@ object HuHoBotMod: HuHoBot {
 
     override fun sendCommand(command: String): CompletableFuture<HExecution> {
         class ModExecution: HExecution {
+            private var rawString: String = ""
+
             override fun getRawString(): String {
-                return "Command Execute."
+                return rawString
             }
 
             override fun execute(command: String): CompletableFuture<HExecution> {
-                commandManager.executeCommand(command) {}
-                return CompletableFuture.completedFuture(this)
+                val future = CompletableFuture<HExecution>()
+
+                commandManager.executeCommand(command) { result ->
+                    rawString = result.output
+                    future.complete(this)
+                }
+
+                return future
             }
         }
         return ModExecution().execute(command)

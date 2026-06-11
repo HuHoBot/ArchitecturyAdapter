@@ -3,6 +3,8 @@
 build/
 outputs/
 .claude/
+AGENTS.md
+CLAUDE.md
 
 # IDE
 .idea/

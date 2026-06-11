@@ -13,6 +13,7 @@ import org.yaml.snakeyaml.Yaml
 import org.yaml.snakeyaml.DumperOptions
 import java.io.*
 import java.nio.file.Files
+import java.nio.charset.StandardCharsets
 import java.util.*
 
 /**
@@ -24,13 +25,53 @@ class ConfigManager(private val mod: HuHoBotMod) {
     private val configFile: File
     private var config: MutableMap<String, Any> = mutableMapOf()
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 1
+        private const val CURRENT_CONFIG_VERSION = 2
+        private const val DEFAULT_CONFIG_RESOURCE = "huhobot/config.yml"
+        private val FALLBACK_DEFAULT_CONFIG = """
+            serverId: null
+            hashKey: null
+
+            chatFormat:
+              from_game: "<{name}> {msg}"
+              from_group: "群:<{nick}> {msg}"
+              post_chat: true
+              post_prefix: ""
+
+            motd:
+              server_ip: "play.hypixel.net"
+              server_port: 25565
+              api: "https://motdbe.blackbe.work/status_img/java?host={server_ip}:{server_port}"
+              text: "共{online}人在线"
+              output_online_list: true
+              post_img: true
+              markdown: true
+              customMarkdown: false
+
+            whiteList:
+              add: "whitelist add {name}"
+              del: "whitelist remove {name}"
+
+            callbackConvertImg: 0
+
+            customCommand:
+              - key: "加白名"
+                command: "whitelist add &1"
+                permission: 0
+              - key: "管理加白名"
+                command: "whitelist add &1"
+                permission: 1
+
+            filterRegex:
+              - '\u001B\[[;\d]*[ -/]*[@-~]'
+
+            version: 2
+        """.trimIndent()
     }
 
     init {
         // 配置目录：服务器根目录/config/huhobot
 
-        configDir = File(ExpectPlatform.getConfigDirectory().toString()+"/huhobot")
+        configDir = ExpectPlatform.getConfigDirectory().resolve("huhobot").normalize().toFile()
 
         if (!configDir.exists() && !configDir.mkdirs()) {
             logger.error("创建配置目录失败！路径：${configDir.absolutePath}")
@@ -55,18 +96,24 @@ class ConfigManager(private val mod: HuHoBotMod) {
         }
 
         try {
-            val defaultConfigStream = mod.javaClass.getResourceAsStream("/huhobot/config.yml")
-            if (defaultConfigStream == null) {
-                logger.error("默认配置文件不存在！请在resources目录下创建config.yml")
-                return
+            val defaultConfigStream = openDefaultConfigStream()
+            if (defaultConfigStream != null) {
+                Files.copy(defaultConfigStream, configFile.toPath())
+                defaultConfigStream.close()
+            } else {
+                logger.warn("内置默认配置文件不存在，使用代码内置默认配置")
+                configFile.writeText(FALLBACK_DEFAULT_CONFIG, StandardCharsets.UTF_8)
             }
-
-            Files.copy(defaultConfigStream, configFile.toPath())
             logger.info("生成默认配置文件：${configFile.absolutePath}")
-            defaultConfigStream.close()
         } catch (e: IOException) {
             logger.error("生成默认配置失败$e")
         }
+    }
+
+    private fun openDefaultConfigStream(): InputStream? {
+        return ConfigManager::class.java.classLoader.getResourceAsStream(DEFAULT_CONFIG_RESOURCE)
+            ?: mod.javaClass.classLoader.getResourceAsStream(DEFAULT_CONFIG_RESOURCE)
+            ?: mod.javaClass.getResourceAsStream("/$DEFAULT_CONFIG_RESOURCE")
     }
 
     /**
@@ -89,6 +136,9 @@ class ConfigManager(private val mod: HuHoBotMod) {
 
             // 检查并转换配置版本
             checkAndConvertConfig()
+
+            // 补齐缺失默认项，修复旧版本或资源复制失败后只剩 serverId/hashKey 的配置
+            ensureDefaultConfigValues()
 
             logger.info("配置加载完成")
         } catch (e: IOException) {
@@ -120,17 +170,74 @@ class ConfigManager(private val mod: HuHoBotMod) {
 
     // 配置转换实现方法
     private fun convertConfigToLatestVersion(oldVersion: Int) {
-        when (oldVersion) {
-            0 -> {
-                // 从版本0升级到版本1
-                // 添加新的 callbackConvertImg 配置项
-                if (getConfigValueByPath("callbackConvertImg") == null) {
-                    setConfigValueByPath("callbackConvertImg", 0)
-                }
-
-                // 可以在这里添加其他从版本0到版本1的转换逻辑
+        if (oldVersion < 1) {
+            // 从版本0升级到版本1
+            if (getConfigValueByPath("callbackConvertImg") == null) {
+                setConfigValueByPath("callbackConvertImg", 0)
             }
         }
+
+        if (oldVersion < 2) {
+            // 从版本1升级到版本2
+            if (getConfigValueByPath("motd.markdown") == null) {
+                setConfigValueByPath("motd.markdown", true)
+            }
+            if (getConfigValueByPath("motd.customMarkdown") == null) {
+                setConfigValueByPath("motd.customMarkdown", false)
+            }
+            if (getConfigValueByPath("filterRegex") == null) {
+                setConfigValueByPath("filterRegex", listOf("\u001B\\[[;\\d]*[ -/]*[@-~]"))
+            }
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun ensureDefaultConfigValues() {
+        val defaults = loadDefaultConfigMap()
+        if (defaults.isEmpty()) {
+            return
+        }
+
+        if (mergeMissingValues(config, defaults)) {
+            saveConfig()
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun loadDefaultConfigMap(): Map<String, Any> {
+        val options = DumperOptions()
+        options.defaultFlowStyle = DumperOptions.FlowStyle.BLOCK
+        val yaml = Yaml(options)
+
+        openDefaultConfigStream()?.use { input ->
+            val reader = InputStreamReader(input, StandardCharsets.UTF_8)
+            return yaml.load<MutableMap<String, Any>>(reader) ?: mutableMapOf()
+        }
+
+        return yaml.load<MutableMap<String, Any>>(FALLBACK_DEFAULT_CONFIG) ?: mutableMapOf()
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun mergeMissingValues(target: MutableMap<String, Any>, defaults: Map<String, Any>): Boolean {
+        var changed = false
+
+        defaults.forEach { (key, defaultValue) ->
+            if (!target.containsKey(key)) {
+                target[key] = defaultValue
+                changed = true
+                return@forEach
+            }
+
+            val currentValue = target[key]
+            if (currentValue is MutableMap<*, *> && defaultValue is Map<*, *>) {
+                changed = mergeMissingValues(
+                    currentValue as MutableMap<String, Any>,
+                    defaultValue as Map<String, Any>
+                ) || changed
+            }
+        }
+
+        return changed
     }
 
     /**
@@ -239,7 +346,9 @@ class ConfigManager(private val mod: HuHoBotMod) {
         val text = getString("motd.text", "共{online}人在线")
         val outputOnlineList = getBoolean("motd.output_online_list", true)
         val postImg = getBoolean("motd.post_img", true)
-        return Motd(serverIP, serverPort, api, text, outputOnlineList, postImg)
+        val markdown = getBoolean("motd.markdown", true)
+        val customMarkdown = getBoolean("motd.customMarkdown", false)
+        return Motd(serverIP, serverPort, api, text, outputOnlineList, postImg, markdown, customMarkdown)
     }
 
     fun getChatFormat(): ChatFormat {
@@ -308,6 +417,23 @@ class ConfigManager(private val mod: HuHoBotMod) {
 
     fun getCallbackConvertImg(): Int{
         return getInt("callbackConvertImg", 0)
+    }
+
+    fun getFilterRegex(): List<Regex> {
+        val value = getConfigValueByPath("filterRegex")
+        if (value !is List<*>) {
+            return emptyList()
+        }
+
+        return value.mapNotNull { item ->
+            val pattern = item as? String ?: return@mapNotNull null
+            try {
+                Regex(pattern)
+            } catch (e: IllegalArgumentException) {
+                logger.warn("filterRegex 配置无效：$pattern")
+                null
+            }
+        }
     }
 
     // ------------------------------ 通用类型Get方法（供扩展） ------------------------------
