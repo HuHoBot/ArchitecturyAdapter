@@ -1,10 +1,15 @@
 import net.fabricmc.loom.api.LoomGradleExtensionAPI
+import java.io.File
+import org.gradle.api.tasks.Exec
+import org.gradle.api.tasks.TaskProvider
+import org.gradle.jvm.toolchain.JavaToolchainService
 
 plugins {
     java
     kotlin("jvm") version "2.2.0"
     id("architectury-plugin") version "3.4-SNAPSHOT"
-    id("dev.architectury.loom") version "1.10-SNAPSHOT" apply false
+    id("dev.architectury.loom") version "1.14.476" apply false
+    id("dev.architectury.loom-no-remap") version "1.14.476" apply false
     id("com.gradleup.shadow") version "9.2.2"
 }
 
@@ -83,12 +88,18 @@ if (!versionMatrix.containsKey(fullMinecraftVersion)) {
 // 获取对应版本的配置
 val versionConfig = versionMatrix[fullMinecraftVersion]!!
 
-// 根据minecraft_version设置enabled_platforms
-val enabledPlatforms = if (isBefore1204(fullMinecraftVersion)) {
+// 根据版本矩阵或minecraft_version设置enabled_platforms
+val isReleaseBuild = (commandLineProps["release_build"] ?: System.getProperty("release_build") ?: "false").toBoolean()
+val enabledPlatforms = (if (isReleaseBuild) {
+    versionConfig["release_enabled_platforms"]?.takeIf { it.isNotBlank() }
+} else {
+    null
+}) ?: versionConfig["enabled_platforms"]?.takeIf { it.isNotBlank() } ?: if (isBefore1204(fullMinecraftVersion)) {
     "fabric,forge"
 } else {
     "fabric,neoforge"
 }
+val enabledPlatformList = enabledPlatforms.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
 // 从矩阵中获取版本参数
 val forgeVersion = versionConfig["forge_version"] ?: ""
@@ -99,6 +110,16 @@ val fabricLoaderVersion = versionConfig["fabric_loader_version"] ?: ""
 val fabricApiVersion = versionConfig["fabric_api_version"] ?: ""
 val fabricKotlinVersion = versionConfig["fabric_kotlin_version"] ?: ""
 val jvmVersion = versionConfig["jvm_version"] ?: "17" // 默认使用17
+val kotlinJvmTargetVersion = versionConfig["kotlin_jvm_target"] ?: jvmVersion.toInt().coerceAtMost(24).toString()
+val fabricMinecraftDependency = versionConfig["fabric_minecraft_dependency"] ?: fullMinecraftVersion
+val forgeMinecraftVersionRange = versionConfig["forge_minecraft_version_range"] ?: "[$fullMinecraftVersion]"
+val neoforgeMinecraftVersionRange = versionConfig["neoforge_minecraft_version_range"] ?: "[$fullMinecraftVersion]"
+val useMojangMappings = (versionConfig["mojang_mappings"] ?: "true").toBoolean()
+val loomPluginId = if (useMojangMappings) {
+    "dev.architectury.loom"
+} else {
+    "dev.architectury.loom-no-remap"
+}
 
 // 打印调试信息
 println("Using minecraft_version: '$fullMinecraftVersion'")
@@ -111,38 +132,11 @@ println("Fabric Loader version: $fabricLoaderVersion")
 println("Fabric API version: $fabricApiVersion")
 println("Fabric Kotlin version: $fabricKotlinVersion")
 println("JVM version: $jvmVersion")
-
-// 修改gradle.properties中的配置
-val gradlePropertiesFile = file("gradle.properties")
-if (gradlePropertiesFile.exists()) {
-    var content = gradlePropertiesFile.readText()
-    
-    // 更新版本配置
-    val updates = mapOf(
-        "minecraft_version" to fullMinecraftVersion,
-        "enabled_platforms" to enabledPlatforms,
-        "forge_version" to forgeVersion,
-        "neoforge_version" to neoforgeVersion,
-        "architectury_version" to architecturyVersion,
-        "kotlin_for_forge_version" to kotlinForForgeVersion,
-        "fabric_loader_version" to fabricLoaderVersion,
-        "fabric_api_version" to fabricApiVersion,
-        "fabric_kotlin_version" to fabricKotlinVersion
-    )
-    
-    var newContent = content
-    updates.forEach { (key, value) ->
-        if (value.isNotEmpty()) {
-            newContent = newContent.replace(Regex("$key=.*"), "$key=$value")
-        }
-    }
-    
-    if (content != newContent) {
-        gradlePropertiesFile.writeText(newContent)
-        println("Updated gradle.properties with versions from matrix")
-        // 由于settings.gradle.kts已经在早期阶段更新了gradle.properties，子项目会使用正确的版本信息
-    }
-}
+println("Kotlin JVM target version: $kotlinJvmTargetVersion")
+println("Fabric Minecraft dependency: $fabricMinecraftDependency")
+println("Forge Minecraft version range: $forgeMinecraftVersionRange")
+println("NeoForge Minecraft version range: $neoforgeMinecraftVersionRange")
+println("Use Mojang mappings: $useMojangMappings")
 
 // 设置architectury插件的minecraft版本
 architectury {
@@ -160,6 +154,20 @@ allprojects {
     ext["fabric_loader_version"] = fabricLoaderVersion
     ext["fabric_api_version"] = fabricApiVersion
     ext["fabric_kotlin_version"] = fabricKotlinVersion
+    ext["jvm_version"] = jvmVersion
+    ext["kotlin_jvm_target"] = kotlinJvmTargetVersion
+    ext["fabric_minecraft_dependency"] = fabricMinecraftDependency
+    ext["forge_minecraft_version_range"] = forgeMinecraftVersionRange
+    ext["neoforge_minecraft_version_range"] = neoforgeMinecraftVersionRange
+    ext["mojang_mappings"] = useMojangMappings.toString()
+}
+
+fun Project.configureMinecraftDependencies() {
+    val loom = extensions.getByName<LoomGradleExtensionAPI>("loom")
+    dependencies.add("minecraft", "com.mojang:minecraft:$fullMinecraftVersion")
+    if (useMojangMappings) {
+        dependencies.add("mappings", loom.officialMojangMappings())
+    }
 }
 
 // 只对主项目的子项目应用配置，不包括botSdk子项目
@@ -171,68 +179,7 @@ project(":common") {
     apply(plugin = "kotlin")
     apply(plugin = "architectury-plugin")
     apply(plugin = "maven-publish")
-    apply(plugin = "dev.architectury.loom")
-
-    base.archivesName.set("${property("archives_base_name").toString()}-$fullMinecraftVersion")
-    group = property("maven_group").toString()
-
-    repositories {
-        mavenCentral()
-    }
-
-    // 设置Java工具链
-    configure<JavaPluginExtension> {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(17)
-        }
-    }
-
-    // 设置loom配置
-    val loom = extensions.getByName<LoomGradleExtensionAPI>("loom")
-    dependencies {
-        "minecraft"("com.mojang:minecraft:$fullMinecraftVersion")
-        "mappings"(loom.officialMojangMappings())
-    }
-
-    dependencies {
-        compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
-        implementation(project(":botSdk:common-Bot"))
-        implementation("org.yaml:snakeyaml:2.5")
-        implementation(group = "com.alibaba.fastjson2", name = "fastjson2", version = "2.0.52")
-        implementation("io.ktor:ktor-client-websockets:2.3.12")
-        implementation("io.ktor:ktor-client-cio:2.3.12")
-        implementation("io.ktor:ktor-client-core:2.3.12") {
-            exclude(group = "org.slf4j")
-            exclude(group = "org.yaml")
-        }
-        implementation("com.alibaba.fastjson2:fastjson2:2.0.52") {
-            exclude(group = "org.jetbrains")
-        }
-    }
-
-    tasks.withType<JavaCompile> {
-        options.encoding = "UTF-8"
-        options.release.set(jvmVersion.toInt())
-    }
-
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(jvmVersion))
-        }
-    }
-
-    java {
-        withSourcesJar()
-    }
-}
-
-// 配置Fabric项目
-project(":fabric") {
-    apply(plugin = "java")
-    apply(plugin = "kotlin")
-    apply(plugin = "architectury-plugin")
-    apply(plugin = "maven-publish")
-    apply(plugin = "dev.architectury.loom")
+    apply(plugin = loomPluginId)
 
     base.archivesName.set("${property("archives_base_name").toString()}-$fullMinecraftVersion")
     group = property("maven_group").toString()
@@ -249,11 +196,7 @@ project(":fabric") {
     }
 
     // 设置loom配置
-    val loom = extensions.getByName<LoomGradleExtensionAPI>("loom")
-    dependencies {
-        "minecraft"("com.mojang:minecraft:$fullMinecraftVersion")
-        "mappings"(loom.officialMojangMappings())
-    }
+    configureMinecraftDependencies()
 
     dependencies {
         compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
@@ -277,8 +220,9 @@ project(":fabric") {
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+        jvmTargetValidationMode.set(org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode.WARNING)
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(jvmVersion))
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(kotlinJvmTargetVersion))
         }
     }
 
@@ -287,79 +231,14 @@ project(":fabric") {
     }
 }
 
-// 根据enabled_platforms条件配置Forge或NeoForge项目，但只在项目存在时才配置
-// 检查Forge项目是否存在
-if (enabledPlatforms.contains("forge") && project.findProject(":forge") != null) {
-    project(":forge") { 
+// 配置Fabric项目
+if (project.findProject(":fabric") != null) {
+    project(":fabric") {
         apply(plugin = "java")
         apply(plugin = "kotlin")
         apply(plugin = "architectury-plugin")
         apply(plugin = "maven-publish")
-        apply(plugin = "dev.architectury.loom")
-
-        base.archivesName.set(property("archives_base_name").toString())
-        group = property("maven_group").toString()
-
-        repositories {
-            mavenCentral()
-        }
-
-        // 设置Java工具链
-        configure<JavaPluginExtension> {
-            toolchain {
-                languageVersion = JavaLanguageVersion.of(jvmVersion.toInt())
-            }
-        }
-
-        // 设置loom配置
-        val loom = extensions.getByName<LoomGradleExtensionAPI>("loom")
-        dependencies {
-            "minecraft"("com.mojang:minecraft:$fullMinecraftVersion")
-            "mappings"(loom.officialMojangMappings())
-        }
-
-        dependencies {
-            compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
-            implementation(project(":botSdk:common-Bot"))
-            implementation("org.yaml:snakeyaml:2.5")
-            implementation(group = "com.alibaba.fastjson2", name = "fastjson2", version = "2.0.52")
-            implementation("io.ktor:ktor-client-websockets:2.3.12")
-            implementation("io.ktor:ktor-client-cio:2.3.12")
-            implementation("io.ktor:ktor-client-core:2.3.12") {
-                exclude(group = "org.slf4j")
-                exclude(group = "org.yaml")
-            }
-            implementation("com.alibaba.fastjson2:fastjson2:2.0.52") {
-                exclude(group = "org.jetbrains")
-            }
-        }
-
-        tasks.withType<JavaCompile> {
-            options.encoding = "UTF-8"
-            options.release.set(jvmVersion.toInt())
-        }
-
-        // 设置Kotlin编译任务的JVM目标版本
-        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-            compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(jvmVersion))
-            }
-        }
-
-        java {
-            withSourcesJar()
-        }
-    }
-}
-
-// 检查NeoForge项目是否存在
-if (enabledPlatforms.contains("neoforge") && project.findProject(":neoforge") != null) {
-    project(":neoforge") { 
-        apply(plugin = "java")
-        apply(plugin = "kotlin")
-        apply(plugin = "architectury-plugin")
-        apply(plugin = "maven-publish")
-        apply(plugin = "dev.architectury.loom")
+        apply(plugin = loomPluginId)
 
         base.archivesName.set("${property("archives_base_name").toString()}-$fullMinecraftVersion")
         group = property("maven_group").toString()
@@ -376,11 +255,68 @@ if (enabledPlatforms.contains("neoforge") && project.findProject(":neoforge") !=
         }
 
         // 设置loom配置
-        val loom = extensions.getByName<LoomGradleExtensionAPI>("loom")
+        configureMinecraftDependencies()
+
         dependencies {
-            "minecraft"("com.mojang:minecraft:$fullMinecraftVersion")
-            "mappings"(loom.officialMojangMappings())
+            compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
+            implementation(project(":botSdk:common-Bot"))
+            implementation("org.yaml:snakeyaml:2.5")
+            implementation(group = "com.alibaba.fastjson2", name = "fastjson2", version = "2.0.52")
+            implementation("io.ktor:ktor-client-websockets:2.3.12")
+            implementation("io.ktor:ktor-client-cio:2.3.12")
+            implementation("io.ktor:ktor-client-core:2.3.12") {
+                exclude(group = "org.slf4j")
+                exclude(group = "org.yaml")
+            }
+            implementation("com.alibaba.fastjson2:fastjson2:2.0.52") {
+                exclude(group = "org.jetbrains")
+            }
         }
+
+        tasks.withType<JavaCompile> {
+            options.encoding = "UTF-8"
+            options.release.set(jvmVersion.toInt())
+        }
+
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+            jvmTargetValidationMode.set(org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode.WARNING)
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(kotlinJvmTargetVersion))
+            }
+        }
+
+        java {
+            withSourcesJar()
+        }
+    }
+}
+
+// 根据enabled_platforms条件配置Forge或NeoForge项目，但只在项目存在时才配置
+// 检查Forge项目是否存在
+if (enabledPlatformList.contains("forge") && project.findProject(":forge") != null) {
+    project(":forge") { 
+        apply(plugin = "java")
+        apply(plugin = "kotlin")
+        apply(plugin = "architectury-plugin")
+        apply(plugin = "maven-publish")
+        apply(plugin = loomPluginId)
+
+        base.archivesName.set(property("archives_base_name").toString())
+        group = property("maven_group").toString()
+
+        repositories {
+            mavenCentral()
+        }
+
+        // 设置Java工具链
+        configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(jvmVersion.toInt())
+            }
+        }
+
+        // 设置loom配置
+        configureMinecraftDependencies()
 
         dependencies {
             compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
@@ -405,8 +341,70 @@ if (enabledPlatforms.contains("neoforge") && project.findProject(":neoforge") !=
 
         // 设置Kotlin编译任务的JVM目标版本
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+            jvmTargetValidationMode.set(org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode.WARNING)
             compilerOptions {
-                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(jvmVersion))
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(kotlinJvmTargetVersion))
+            }
+        }
+
+        java {
+            withSourcesJar()
+        }
+    }
+}
+
+// 检查NeoForge项目是否存在
+if (enabledPlatformList.contains("neoforge") && project.findProject(":neoforge") != null) {
+    project(":neoforge") { 
+        apply(plugin = "java")
+        apply(plugin = "kotlin")
+        apply(plugin = "architectury-plugin")
+        apply(plugin = "maven-publish")
+        apply(plugin = loomPluginId)
+
+        base.archivesName.set("${property("archives_base_name").toString()}-$fullMinecraftVersion")
+        group = property("maven_group").toString()
+
+        repositories {
+            mavenCentral()
+        }
+
+        // 设置Java工具链
+        configure<JavaPluginExtension> {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(jvmVersion.toInt())
+            }
+        }
+
+        // 设置loom配置
+        configureMinecraftDependencies()
+
+        dependencies {
+            compileOnly("org.jetbrains.kotlin:kotlin-stdlib")
+            implementation(project(":botSdk:common-Bot"))
+            implementation("org.yaml:snakeyaml:2.5")
+            implementation(group = "com.alibaba.fastjson2", name = "fastjson2", version = "2.0.52")
+            implementation("io.ktor:ktor-client-websockets:2.3.12")
+            implementation("io.ktor:ktor-client-cio:2.3.12")
+            implementation("io.ktor:ktor-client-core:2.3.12") {
+                exclude(group = "org.slf4j")
+                exclude(group = "org.yaml")
+            }
+            implementation("com.alibaba.fastjson2:fastjson2:2.0.52") {
+                exclude(group = "org.jetbrains")
+            }
+        }
+
+        tasks.withType<JavaCompile> {
+            options.encoding = "UTF-8"
+            options.release.set(jvmVersion.toInt())
+        }
+
+        // 设置Kotlin编译任务的JVM目标版本
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+            jvmTargetValidationMode.set(org.jetbrains.kotlin.gradle.dsl.jvm.JvmTargetValidationMode.WARNING)
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget(kotlinJvmTargetVersion))
             }
         }
 
@@ -425,8 +423,106 @@ tasks.register("customBuild") {
     dependsOn(tasks.named("build"))
 }
 
+fun minecraftVersionTaskSuffix(version: String): String {
+    return version.replace(Regex("[^A-Za-z0-9]"), "_")
+}
+
+val gradleWrapperExecutable = if (System.getProperty("os.name").lowercase().contains("windows")) {
+    rootProject.file("gradlew.bat").absolutePath
+} else {
+    rootProject.file("gradlew").absolutePath
+}
+val javaToolchains = extensions.getByType<JavaToolchainService>()
+
+fun registerMinecraftBuildTask(
+    taskName: String,
+    targetMinecraftVersion: String,
+    releaseBuild: Boolean,
+    predecessor: TaskProvider<Exec>?
+): TaskProvider<Exec> {
+    return tasks.register<Exec>(taskName) {
+        group = "build"
+        description = if (releaseBuild) {
+            "Build release baseline jars for Minecraft $targetMinecraftVersion"
+        } else {
+            "Build platform jars for Minecraft $targetMinecraftVersion"
+        }
+        workingDir = rootDir
+        val targetJvmVersion = versionMatrix[targetMinecraftVersion]?.get("jvm_version")?.toIntOrNull() ?: 17
+        val javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(targetJvmVersion)
+        }
+        doFirst {
+            val javaHome = javaLauncher.get().metadata.installationPath.asFile
+            environment("JAVA_HOME", javaHome.absolutePath)
+            environment(
+                "PATH",
+                javaHome.resolve("bin").absolutePath + File.pathSeparator + (System.getenv("PATH") ?: "")
+            )
+        }
+        commandLine(gradleWrapperExecutable, "customBuild", "-Pminecraft_version=$targetMinecraftVersion")
+        if (releaseBuild) {
+            args("-Prelease_build=true")
+        }
+        gradle.startParameter.projectProperties
+            .filterKeys { it != "minecraft_version" && it != "release_build" }
+            .forEach { (key, value) -> args("-P$key=$value") }
+        outputs.upToDateWhen { false }
+        predecessor?.let { mustRunAfter(it) }
+    }
+}
+
+val matrixBuildTasks = mutableListOf<TaskProvider<Exec>>()
+var previousMatrixBuildTask: TaskProvider<Exec>? = null
+versionMatrix.keys.forEach { targetMinecraftVersion ->
+    val matrixBuildTask = registerMinecraftBuildTask(
+        "customBuildMinecraft${minecraftVersionTaskSuffix(targetMinecraftVersion)}",
+        targetMinecraftVersion,
+        releaseBuild = false,
+        predecessor = previousMatrixBuildTask
+    )
+    matrixBuildTasks.add(matrixBuildTask)
+    previousMatrixBuildTask = matrixBuildTask
+}
+
+val releaseMinecraftVersions = versionMatrix
+    .filterValues { it["release_build"]?.toBoolean() == true }
+    .keys
+    .ifEmpty { versionMatrix.keys }
+
+val releaseBuildTasks = mutableListOf<TaskProvider<Exec>>()
+var previousReleaseBuildTask: TaskProvider<Exec>? = null
+releaseMinecraftVersions.forEach { targetMinecraftVersion ->
+    val releaseBuildTask = registerMinecraftBuildTask(
+        "releaseBuildMinecraft${minecraftVersionTaskSuffix(targetMinecraftVersion)}",
+        targetMinecraftVersion,
+        releaseBuild = true,
+        predecessor = previousReleaseBuildTask
+    )
+    releaseBuildTasks.add(releaseBuildTask)
+    previousReleaseBuildTask = releaseBuildTask
+}
+
+tasks.register("buildReleaseVersions") {
+    group = "build"
+    description = "Build release compatibility baseline jars"
+    dependsOn(releaseBuildTasks)
+}
+
+tasks.register("buildAllVersions") {
+    group = "build"
+    description = "Build release compatibility baseline jars"
+    dependsOn(releaseBuildTasks)
+}
+
+tasks.register("buildAllMatrixVersions") {
+    group = "build"
+    description = "Build every Minecraft version declared in versions-matrix.yaml"
+    dependsOn(matrixBuildTasks)
+}
+
 // 添加收集jar文件的任务
-tasks.register<Copy>("gatherJars") {
+val gatherJars = tasks.register<Copy>("gatherJars") {
     group = "build"
     description = "Gather all built jars from platforms and copy to outputs directory"
     
@@ -434,26 +530,31 @@ tasks.register<Copy>("gatherJars") {
     val targetDir = file("outputs")
     mkdir(targetDir)
     
-    // 收集所有平台的remapJar任务输出
-    // 添加fabric平台的jar
-    if (project.findProject(":fabric") != null) {
-        from(project(":fabric").tasks.named("remapJar"))
-    }
-    // 添加forge平台的jar（如果存在）
-    if (project.findProject(":forge") != null) {
-        from(project(":forge").tasks.named("remapJar"))
-    }
-    // 添加neoforge平台的jar（如果存在）
-    if (project.findProject(":neoforge") != null) {
-        from(project(":neoforge").tasks.named("remapJar"))
-    }
-    
     // 拷贝到目标目录
     into(targetDir)
     println("Gathered jars copied to: $targetDir")
 }
 
+gradle.projectsEvaluated {
+    gatherJars.configure {
+        fun fromPlatform(projectPath: String) {
+            project.findProject(projectPath)?.let { platformProject ->
+                val artifactTaskName = if (platformProject.tasks.findByName("remapJar") != null) {
+                    "remapJar"
+                } else {
+                    "shadowJar"
+                }
+                from(platformProject.tasks.named(artifactTaskName))
+            }
+        }
+
+        fromPlatform(":fabric")
+        fromPlatform(":forge")
+        fromPlatform(":neoforge")
+    }
+}
+
 // 修改customBuild任务，使其依赖于gatherJars任务
 tasks.named("customBuild") {
-    dependsOn(tasks.named("gatherJars"))
+    dependsOn(gatherJars)
 }

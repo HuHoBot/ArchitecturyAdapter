@@ -27,12 +27,11 @@ pluginManagement {
 
 // 使用Foojay Toolchains插件自动下载JDK
 plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 // 包含主项目的子模块
 include(":common")
-include(":fabric")
 
 // 读取版本矩阵文件的辅助函数
 fun readVersionMatrix(): Map<String, Map<String, String>> {
@@ -73,11 +72,12 @@ fun readVersionMatrix(): Map<String, Map<String, String>> {
 // 同时检查gradle.properties文件中的值，确保在所有情况下都能正确获取版本
 val gradlePropsFile = file("gradle.properties")
 val gradlePropsMinecraftVersion = gradlePropsFile.takeIf { it.exists() }?.readLines()?.find { it.startsWith("minecraft_version=") }?.substringAfter("=")?.trim() ?: ""
-val minecraftVersion = providers.gradleProperty("minecraft_version")
-    .orElse(providers.systemProperty("minecraft_version"))
-    .orElse(gradlePropsMinecraftVersion)
-    .orElse("1.20.4")
-    .get()
+val minecraftVersion = listOfNotNull(
+    gradle.startParameter.projectProperties["minecraft_version"]?.trim(),
+    System.getProperty("minecraft_version")?.trim(),
+    gradlePropsMinecraftVersion,
+    "1.20.4"
+).first { it.isNotEmpty() }
 
 // 读取版本矩阵
 val versionMatrix = readVersionMatrix()
@@ -90,7 +90,7 @@ if (!versionMatrix.containsKey(minecraftVersion)) {
 // 获取对应版本的配置
 val versionConfig = versionMatrix[minecraftVersion]!!
 
-// 根据minecraft_version设置enabled_platforms
+// 根据版本矩阵或minecraft_version设置enabled_platforms
 val isBefore1204 = try {
     val parts = minecraftVersion.split(".").map { it.toIntOrNull() ?: 0 }
     if (parts.size >= 3) {
@@ -104,41 +104,17 @@ val isBefore1204 = try {
     false
 }
 
-val enabledPlatforms = if (isBefore1204) {
+val isReleaseBuild = (gradle.startParameter.projectProperties["release_build"] ?: System.getProperty("release_build") ?: "false").toBoolean()
+val enabledPlatforms = (if (isReleaseBuild) {
+    versionConfig["release_enabled_platforms"]?.takeIf { it.isNotBlank() }
+} else {
+    null
+}) ?: versionConfig["enabled_platforms"]?.takeIf { it.isNotBlank() } ?: if (isBefore1204) {
     "fabric,forge"
 } else {
     "fabric,neoforge"
 }
-
-// 更新gradle.properties文件
-if (gradlePropsFile.exists()) {
-    var content = gradlePropsFile.readText()
-    
-    // 更新版本配置
-    val updates = mapOf(
-        "minecraft_version" to minecraftVersion,
-        "enabled_platforms" to enabledPlatforms,
-        "forge_version" to (versionConfig["forge_version"] ?: ""),
-        "neoforge_version" to (versionConfig["neoforge_version"] ?: ""),
-        "architectury_version" to (versionConfig["architectury_version"] ?: ""),
-        "kotlin_for_forge_version" to (versionConfig["kotlin_for_forge_version"] ?: ""),
-        "fabric_loader_version" to (versionConfig["fabric_loader_version"] ?: ""),
-        "fabric_api_version" to (versionConfig["fabric_api_version"] ?: ""),
-        "fabric_kotlin_version" to (versionConfig["fabric_kotlin_version"] ?: "")
-    )
-    
-    var newContent = content
-    updates.forEach { (key, value) ->
-        if (value.isNotEmpty()) {
-            newContent = newContent.replace(Regex("$key=.*"), "$key=$value")
-        }
-    }
-    
-    if (content != newContent) {
-        gradlePropsFile.writeText(newContent)
-        println("Settings.gradle.kts: Updated gradle.properties with versions from matrix for Minecraft $minecraftVersion")
-    }
-}
+val enabledPlatformList = enabledPlatforms.split(",").map { it.trim() }.filter { it.isNotEmpty() }
 
 // 打印调试信息，确认版本和包含的项目
 println("Settings.gradle.kts: Using minecraft_version: '$minecraftVersion'")
@@ -146,10 +122,15 @@ println("Settings.gradle.kts: isBefore1204: $isBefore1204")
 println("Settings.gradle.kts: Enabled platforms: $enabledPlatforms")
 
 // 根据Minecraft版本包含对应的平台子项目
-if (isBefore1204) {
+if (enabledPlatformList.contains("fabric")) {
+    println("Settings.gradle.kts: Including fabric project")
+    include(":fabric")
+}
+if (enabledPlatformList.contains("forge")) {
     println("Settings.gradle.kts: Including forge project")
     include(":forge")
-} else {
+}
+if (enabledPlatformList.contains("neoforge")) {
     println("Settings.gradle.kts: Including neoforge project")
     include(":neoforge")
 }

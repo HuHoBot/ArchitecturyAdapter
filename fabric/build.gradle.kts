@@ -17,13 +17,16 @@ architectury {
     fabric()
 }
 
-loom {
-    accessWidenerPath.set(project(":common").loom.accessWidenerPath)
-}
-
 val common: Configuration by configurations.creating
 val shadowCommon: Configuration by configurations.creating
 val developmentFabric: Configuration by configurations.getting
+val usesMojangMappings = project.property("mojang_mappings").toString().toBoolean()
+val commonElements = if (usesMojangMappings) "namedElements" else "runtimeElements"
+val commonShadowElements = if (usesMojangMappings) "transformProductionFabric" else "runtimeElements"
+
+fun dependencyConfiguration(preferred: String, fallback: String): String {
+    return if (configurations.findByName(preferred) != null) preferred else fallback
+}
 
 configurations {
     getByName("compileClasspath").extendsFrom(common)
@@ -32,15 +35,15 @@ configurations {
 }
 
 dependencies {
-    modImplementation("net.fabricmc:fabric-loader:${project.property("fabric_loader_version")}")
-    modApi("net.fabricmc.fabric-api:fabric-api:${project.property("fabric_api_version")}")
+    add(dependencyConfiguration("modImplementation", "implementation"), "net.fabricmc:fabric-loader:${project.property("fabric_loader_version")}")
+    add(dependencyConfiguration("modApi", "implementation"), "net.fabricmc.fabric-api:fabric-api:${project.property("fabric_api_version")}")
     // Remove the next line if you don't want to depend on the API
-    modApi("dev.architectury:architectury-fabric:${project.property("architectury_version")}")
+    add(dependencyConfiguration("modApi", "implementation"), "dev.architectury:architectury-fabric:${project.property("architectury_version")}")
 
-    common(project(":common", "namedElements")) { 
+    common(project(":common", commonElements)) { 
         isTransitive = false 
     }
-    shadowCommon(project(":common", "transformProductionFabric")){ isTransitive = false }
+    shadowCommon(project(":common", commonShadowElements)){ isTransitive = false }
     shadowCommon("org.yaml:snakeyaml:2.5")
 
     shadowCommon("io.ktor:ktor-client-websockets:2.3.12")
@@ -53,12 +56,17 @@ dependencies {
     shadowCommon(project(":botSdk:common-Bot")){ isTransitive = false }
 
     // Fabric Kotlin
-    modImplementation("net.fabricmc:fabric-language-kotlin:${project.property("fabric_kotlin_version")}")
+    add(dependencyConfiguration("modImplementation", "implementation"), "net.fabricmc:fabric-language-kotlin:${project.property("fabric_kotlin_version")}")
 }
 
 tasks.processResources {
     inputs.property("group", project.property("maven_group"))
     inputs.property("version", project.version)
+    inputs.property("minecraft_version", project.property("minecraft_version"))
+    inputs.property("fabric_minecraft_dependency", project.property("fabric_minecraft_dependency"))
+    inputs.property("architectury_version", project.property("architectury_version"))
+    inputs.property("fabric_loader_version", project.property("fabric_loader_version"))
+    inputs.property("fabric_kotlin_version", project.property("fabric_kotlin_version"))
 
     filesMatching("fabric.mod.json") {
         expand(mutableMapOf(
@@ -67,7 +75,9 @@ tasks.processResources {
 
             Pair("mod_id", project.property("mod_id")),
             Pair("minecraft_version", project.property("minecraft_version")),
+            Pair("fabric_minecraft_dependency", project.property("fabric_minecraft_dependency")),
             Pair("architectury_version", project.property("architectury_version")),
+            Pair("fabric_loader_version", project.property("fabric_loader_version")),
             Pair("fabric_kotlin_version", project.property("fabric_kotlin_version"))
         ))
     }
@@ -85,15 +95,22 @@ tasks.shadowJar {
     relocate("kotlinx.serialization", "huhobot.shadow.kotlinx.serialization")
     relocate("org.yaml.snakeyaml", "huhobot.shadow.org.yaml.snakeyaml")
     
-    archiveFileName.set("${base.archivesName.get()}-${project.version}-Fabric_devShadow.jar")
+    archiveFileName.set(
+        if (usesMojangMappings) {
+            "${base.archivesName.get()}-${project.version}-Fabric_devShadow.jar"
+        } else {
+            "HuHoBot-${version}-Fabric-${project.property("minecraft_version")}.jar"
+        }
+    )
 }
 
-tasks.remapJar {
-    injectAccessWidener.set(true)
-    inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
-    dependsOn(tasks.shadowJar)
-    // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
-    archiveFileName.set("HuHoBot-${version}-Fabric-${project.property("minecraft_version")}.jar")
+if (usesMojangMappings) {
+    tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
+        inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
+        dependsOn(tasks.shadowJar)
+        // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
+        archiveFileName.set("HuHoBot-${version}-Fabric-${project.property("minecraft_version")}.jar")
+    }
 }
 
 tasks.jar {

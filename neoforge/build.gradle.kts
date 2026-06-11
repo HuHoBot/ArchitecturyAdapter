@@ -10,7 +10,9 @@ val minecraftVersion = project.properties["minecraft_version"]?.toString() ?: ""
 // 使用简单的字符串比较，避免复杂正则表达式的转义问题
 val isAtLeast1204 = try {
     val parts = minecraftVersion.split(".").map { it.toIntOrNull() ?: 0 }
-    if (parts.size >= 3) {
+    if (parts.isNotEmpty() && parts[0] > 1) {
+        true
+    } else if (parts.size >= 3) {
         parts[0] > 1 || 
         (parts[0] == 1 && parts[1] > 20) || 
         (parts[0] == 1 && parts[1] == 20 && parts[2] >= 4)
@@ -27,13 +29,17 @@ if (isAtLeast1204) {
         neoForge()
     }
 
-    loom {
-        accessWidenerPath.set(project(":common").loom.accessWidenerPath)
-    }
-
     val common: Configuration by configurations.creating
     val shadowCommon: Configuration by configurations.creating
     val developmentNeoForge: Configuration by configurations.getting
+    val usesMojangMappings = project.property("mojang_mappings").toString().toBoolean()
+    val commonElements = if (usesMojangMappings) "namedElements" else "runtimeElements"
+    val commonShadowElements = if (usesMojangMappings) "transformProductionNeoForge" else "runtimeElements"
+    configurations.maybeCreate("neoForge")
+
+    fun dependencyConfiguration(preferred: String, fallback: String): String {
+        return if (configurations.findByName(preferred) != null) preferred else fallback
+    }
 
     configurations {
         getByName("compileClasspath").extendsFrom(common)
@@ -55,12 +61,12 @@ if (isAtLeast1204) {
     }
 
     dependencies {
-        neoForge("net.neoforged:neoforge:${project.property("neoforge_version")}")
+        add("neoForge", "net.neoforged:neoforge:${project.property("neoforge_version")}")
         // Remove the next line if you don't want to depend on the API
-        modApi("dev.architectury:architectury-neoforge:${project.property("architectury_version")}")
+        add(dependencyConfiguration("modApi", "implementation"), "dev.architectury:architectury-neoforge:${project.property("architectury_version")}")
 
-        common(project(":common", "namedElements")) { isTransitive = false }
-        shadowCommon(project(":common", "transformProductionNeoForge")) { isTransitive = false }
+        common(project(":common", commonElements)) { isTransitive = false }
+        shadowCommon(project(":common", commonShadowElements)) { isTransitive = false }
         shadowCommon("org.yaml:snakeyaml:2.5")
 
         shadowCommon("io.ktor:ktor-client-websockets:2.3.12")
@@ -80,6 +86,7 @@ if (isAtLeast1204) {
         inputs.property("group", project.property("maven_group"))
         inputs.property("version", project.version)
         inputs.property("neoforge_version", project.property("neoforge_version"))
+        inputs.property("neoforge_minecraft_version_range", project.property("neoforge_minecraft_version_range"))
 
         filesMatching("META-INF/neoforge.mods.toml") {
             expand(mutableMapOf(
@@ -89,6 +96,7 @@ if (isAtLeast1204) {
                 Pair("mod_id", project.property("mod_id")),
                 Pair("minecraft_version", project.property("minecraft_version")),
                 Pair("neoforge_version", project.property("neoforge_version")),
+                Pair("neoforge_minecraft_version_range", project.property("neoforge_minecraft_version_range")),
                 Pair("architectury_version", project.property("architectury_version")),
                 Pair("kotlin_for_forge_version", project.property("kotlin_for_forge_version"))
             ))
@@ -109,15 +117,22 @@ if (isAtLeast1204) {
         relocate("kotlinx.serialization", "huhobot.shadow.kotlinx.serialization")
         relocate("org.yaml.snakeyaml", "huhobot.shadow.org.yaml.snakeyaml")
         
-        archiveFileName.set("${base.archivesName.get()}-${project.version}-NeoForge_devShadow.jar")
+        archiveFileName.set(
+            if (usesMojangMappings) {
+                "${base.archivesName.get()}-${project.version}-NeoForge_devShadow.jar"
+            } else {
+                "HuHoBot-${version}-NeoForge-${project.property("minecraft_version")}.jar"
+            }
+        )
     }
 
-    tasks.remapJar {
-        injectAccessWidener.set(true)
-        inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
-        dependsOn(tasks.shadowJar)
-        // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
-        archiveFileName.set("HuHoBot-${version}-NeoForge-${project.property("minecraft_version")}.jar")
+    if (usesMojangMappings) {
+        tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
+            inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
+            dependsOn(tasks.shadowJar)
+            // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
+            archiveFileName.set("HuHoBot-${version}-NeoForge-${project.property("minecraft_version")}.jar")
+        }
     }
 
     tasks.jar {

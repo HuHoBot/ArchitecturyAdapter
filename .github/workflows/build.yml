@@ -16,11 +16,14 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Setup Java 17
+      - name: Setup Java 17, 21 and 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: |
+            17
+            21
+            25
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -34,34 +37,110 @@ jobs:
           VERSION=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)
           echo "mod_version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Build 1.20.1 (Fabric + Forge)
-      - name: Build 1.20.1 (Fabric + Forge)
+      - name: Build release baselines
         env:
           WS_SERVER_URL: ${{ secrets.WS_SERVER_URL }}
-        run: ./gradlew clean customBuild -Pminecraft_version=1.20.1 -PwsServerUrl="$WS_SERVER_URL"
+        run: ./gradlew clean buildReleaseVersions -PwsServerUrl="$WS_SERVER_URL"
 
-      - name: Collect 1.20.1 jars
+      - name: Collect jars
         run: |
           mkdir -p release
           VERSION=${{ steps.version.outputs.mod_version }}
-          cp outputs/HuHoBot-${VERSION}-Fabric-1.20.1.jar "release/HuHoBot-${VERSION}-Fabric-1.20.1+.jar"
-          cp outputs/HuHoBot-${VERSION}-Forge-1.20.1.jar "release/HuHoBot-${VERSION}-Forge-1.20.1-1.20.4.jar"
-          
-
-
-      # Build 1.20.4 (NeoForge)
-      - name: Build 1.20.4 (Fabric + NeoForge)
-        env:
-          WS_SERVER_URL: ${{ secrets.WS_SERVER_URL }}
-        run: ./gradlew clean customBuild -Pminecraft_version=1.20.4 -PwsServerUrl="$WS_SERVER_URL"
-
-      - name: Collect 1.20.4 jars
-        run: |
-          VERSION=${{ steps.version.outputs.mod_version }}
-          cp outputs/HuHoBot-${VERSION}-NeoForge-1.20.4.jar "release/HuHoBot-${VERSION}-NeoForge-1.20.4+.jar"
+          cp outputs/HuHoBot-${VERSION}-Fabric-1.20.1.jar "release/HuHoBot-${VERSION}-Fabric-1.20.1-1.20.4.jar"
+          cp outputs/HuHoBot-${VERSION}-Forge-1.20.1.jar "release/HuHoBot-${VERSION}-Forge-1.20.1-1.20.3.jar"
+          cp outputs/HuHoBot-${VERSION}-NeoForge-1.20.4.jar "release/HuHoBot-${VERSION}-NeoForge-1.20.4.jar"
+          cp outputs/HuHoBot-${VERSION}-Fabric-1.20.5.jar "release/HuHoBot-${VERSION}-Fabric-1.20.5-1.20.6.jar"
+          cp outputs/HuHoBot-${VERSION}-NeoForge-1.20.5.jar "release/HuHoBot-${VERSION}-NeoForge-1.20.5-1.20.6.jar"
+          cp outputs/HuHoBot-${VERSION}-Fabric-1.21.1.jar "release/HuHoBot-${VERSION}-Fabric-1.21-1.21.1.jar"
+          cp outputs/HuHoBot-${VERSION}-NeoForge-1.21.1.jar "release/HuHoBot-${VERSION}-NeoForge-1.21-1.21.1.jar"
+          cp outputs/HuHoBot-${VERSION}-Fabric-26.1.jar "release/HuHoBot-${VERSION}-Fabric-26.1-26.1.2.jar"
+          cp outputs/HuHoBot-${VERSION}-NeoForge-26.1.jar "release/HuHoBot-${VERSION}-NeoForge-26.1-26.1.2.jar"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: HuHoBot-${{ steps.version.outputs.mod_version }}
+          name: release-artifacts
           path: release/
+
+  release:
+    name: Create Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    # 新增权限配置
+    permissions:
+      contents: write  # 必须的权限
+      actions: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract release info
+        id: changelog
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          # 修复：使用正确的标签格式匹配
+          VERSION=${TAG_NAME#v}  # 去除v前缀（如果CHANGELOG使用纯版本号）
+          
+          CHANGELOG_CONTENT=$(awk -v version="[v$VERSION]" '
+            BEGIN {RS="## "; FS="\n"}
+            $1 ~ version {
+              sub(/\[.*\] - .*\n/, "")
+              gsub(/`/, "\\`")
+              gsub(/"/, "\\\"")
+              print
+              exit
+            }
+          ' CHANGELOG.md)
+          
+          EOF_MARKER=$(openssl rand -base64 12)
+          echo "body<<$EOF_MARKER" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "$EOF_MARKER" >> $GITHUB_OUTPUT
+          
+          # 添加标签名输出
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: artifacts
+
+      - name: Setup workspace
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}  # 去掉v前缀
+          echo '{"latest":"$VERSION"}' > artifacts/latest.json
+
+      - name: Upload to R2
+        uses: ryand56/r2-upload-action@latest
+        with:
+          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
+          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2-bucket: ${{ secrets.R2_BUCKET }}
+          source-dir: artifacts
+          destination-dir: mod
+
+      - name: Get timestamp
+        id: get-time
+        run: echo "TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1  # 改用更可靠的 Action
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag_name }}
+          name: HuHoBot ${{ steps.changelog.outputs.tag_name }}
+          body: |
+            ${{ steps.changelog.outputs.body }}
+            
+            ### 构建信息
+            - 构建时间: ${{ steps.get-time.outputs.TIME }}
+            - 提交哈希: [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})
+          files: |
+            artifacts/HuHoBot-*.jar

@@ -27,18 +27,17 @@ if (isBefore1204) {
         forge()
     }
 
-    loom {
-        accessWidenerPath.set(project(":common").loom.accessWidenerPath)
-
-        forge.apply {
-            convertAccessWideners.set(true)
-            extraAccessWideners.add(loom.accessWidenerPath.get().asFile.name)
-        }
-    }
-
     val common: Configuration by configurations.creating
     val shadowCommon: Configuration by configurations.creating
     val developmentForge: Configuration by configurations.getting
+    val usesMojangMappings = project.property("mojang_mappings").toString().toBoolean()
+    val commonElements = if (usesMojangMappings) "namedElements" else "runtimeElements"
+    val commonShadowElements = if (usesMojangMappings) "transformProductionForge" else "runtimeElements"
+    configurations.maybeCreate("forge")
+
+    fun dependencyConfiguration(preferred: String, fallback: String): String {
+        return if (configurations.findByName(preferred) != null) preferred else fallback
+    }
 
     configurations {
         getByName("compileClasspath").extendsFrom(common)
@@ -56,12 +55,12 @@ if (isBefore1204) {
     }
 
     dependencies {
-        forge("net.minecraftforge:forge:${project.property("forge_version")}")
+        add("forge", "net.minecraftforge:forge:${project.property("forge_version")}")
         // Remove the next line if you don't want to depend on the API
-        modApi("dev.architectury:architectury-forge:${project.property("architectury_version")}")
+        add(dependencyConfiguration("modApi", "implementation"), "dev.architectury:architectury-forge:${project.property("architectury_version")}")
 
-        common(project(":common", "namedElements")) { isTransitive = false }
-        shadowCommon(project(":common", "transformProductionForge")) { isTransitive = false }
+        common(project(":common", commonElements)) { isTransitive = false }
+        shadowCommon(project(":common", commonShadowElements)) { isTransitive = false }
         shadowCommon("org.yaml:snakeyaml:2.5")
 
         shadowCommon("io.ktor:ktor-client-websockets:2.3.12")
@@ -80,6 +79,7 @@ if (isBefore1204) {
     tasks.processResources {
         inputs.property("group", project.property("maven_group"))
         inputs.property("version", project.version)
+        inputs.property("forge_minecraft_version_range", project.property("forge_minecraft_version_range"))
 
         filesMatching("META-INF/mods.toml") {
             expand(mutableMapOf(
@@ -88,6 +88,7 @@ if (isBefore1204) {
 
                 Pair("mod_id", project.property("mod_id")),
                 Pair("minecraft_version", project.property("minecraft_version")),
+                Pair("forge_minecraft_version_range", project.property("forge_minecraft_version_range")),
                 Pair("architectury_version", project.property("architectury_version")),
                 Pair("kotlin_for_forge_version", project.property("kotlin_for_forge_version"))
             ))
@@ -108,15 +109,22 @@ if (isBefore1204) {
         relocate("kotlinx.serialization", "huhobot.shadow.kotlinx.serialization")
         relocate("org.yaml.snakeyaml", "huhobot.shadow.org.yaml.snakeyaml")
         
-        archiveFileName.set("${base.archivesName.get()}-${project.version}-Forge_devShadow.jar")
+        archiveFileName.set(
+            if (usesMojangMappings) {
+                "${base.archivesName.get()}-${project.version}-Forge_devShadow.jar"
+            } else {
+                "HuHoBot-${version}-Forge-${project.property("minecraft_version")}.jar"
+            }
+        )
     }
 
-    tasks.remapJar {
-        injectAccessWidener.set(true)
-        inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
-        dependsOn(tasks.shadowJar)
-        // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
-        archiveFileName.set("HuHoBot-${version}-Forge-${project.property("minecraft_version")}.jar")
+    if (usesMojangMappings) {
+        tasks.named<net.fabricmc.loom.task.RemapJarTask>("remapJar") {
+            inputFile.set(tasks.shadowJar.flatMap { it.archiveFile })
+            dependsOn(tasks.shadowJar)
+            // 更新输出文件名格式为 HuHoBot-{version}-{Platform}-{MinecraftVersion}.jar
+            archiveFileName.set("HuHoBot-${version}-Forge-${project.property("minecraft_version")}.jar")
+        }
     }
 
     tasks.jar {

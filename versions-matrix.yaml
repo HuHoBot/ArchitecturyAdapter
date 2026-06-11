@@ -8,14 +8,25 @@
 #   fabric_loader_version: "fabric_loader版本"
 #   fabric_api_version: "fabric_api版本"
 #   fabric_kotlin_version: "fabric_kotlin版本"
+#   enabled_platforms: "fabric,forge/neoforge" (可选，覆盖默认平台选择)
+#   release_build: "true" (可选，作为发布兼容基线构建)
+#   release_enabled_platforms: "fabric,forge/neoforge" (可选，仅发布基线构建时覆盖平台选择)
+#   fabric_minecraft_dependency: "Fabric minecraft依赖范围" (可选)
+#   forge_minecraft_version_range: "Forge mods.toml minecraft范围" (可选)
+#   neoforge_minecraft_version_range: "NeoForge mods.toml minecraft范围" (可选)
+#   mojang_mappings: "false" (可选，26.1+取消混淆时不再下载官方映射)
+#   kotlin_jvm_target: "Kotlin字节码目标" (可选，Kotlin 2.2最高支持24)
 
 1.20.1:
+  release_build: "true"
   forge_version: "1.20.1-47.4.13"
   architectury_version: "9.2.14"
   kotlin_for_forge_version: "4.12.0"
   fabric_loader_version: "0.16.5"
-  fabric_api_version: "0.92.6+1.20.1"
+  fabric_api_version: "0.92.9+1.20.1"
   fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
+  fabric_minecraft_dependency: ">=1.20.1 <1.20.5"
+  forge_minecraft_version_range: "[1.20.1,1.20.4)"
   jvm_version: "17"
 
 1.20.2:
@@ -23,42 +34,83 @@
   architectury_version: "10.1.20"
   kotlin_for_forge_version: "4.12.0"
   fabric_loader_version: "0.16.5"
-  fabric_api_version: "0.92.6+1.20.1"
+  fabric_api_version: "0.91.6+1.20.2"
+  fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
+  jvm_version: "17"
+
+1.20.3:
+  enabled_platforms: "fabric"
+  architectury_version: "10.1.20"
+  kotlin_for_forge_version: "4.12.0"
+  fabric_loader_version: "0.16.5"
+  fabric_api_version: "0.91.1+1.20.3"
   fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
   jvm_version: "17"
 
 1.20.4:
+  release_build: "true"
+  release_enabled_platforms: "neoforge"
   neoforge_version: "20.4.251"
   architectury_version: "11.1.17"
   kotlin_for_forge_version: "4.12.0"
   fabric_loader_version: "0.16.5"
-  fabric_api_version: "0.92.6+1.20.1"
+  fabric_api_version: "0.97.3+1.20.4"
   fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
+  neoforge_minecraft_version_range: "[1.20.4,1.20.5)"
   jvm_version: "17"
 
 1.20.5:
-  neoforge_version: "20.5.21"
+  release_build: "true"
+  neoforge_version: "20.5.21-beta"
   architectury_version: "12.0.29"
-  kotlin_for_forge_version: "5.0.2"
+  kotlin_for_forge_version: "5.11.0"
   fabric_loader_version: "0.16.5"
-  fabric_api_version: "0.92.6+1.20.1"
+  fabric_api_version: "0.97.8+1.20.5"
   fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
-  jvm_version: "17"
+  fabric_minecraft_dependency: ">=1.20.5 <1.21"
+  neoforge_minecraft_version_range: "[1.20.5,1.21)"
+  jvm_version: "21"
 
-1.21.0:
+1.20.6:
+  neoforge_version: "20.6.139"
+  architectury_version: "12.1.3"
+  kotlin_for_forge_version: "5.11.0"
+  fabric_loader_version: "0.16.5"
+  fabric_api_version: "0.100.8+1.20.6"
+  fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
+  jvm_version: "21"
+
+1.21:
   neoforge_version: "21.0.167"
   architectury_version: "13.0.8"
   kotlin_for_forge_version: "5.10.0"
   fabric_loader_version: "0.16.5"
-  fabric_api_version: "0.92.6+1.20.1"
+  fabric_api_version: "0.102.0+1.21"
   fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
   jvm_version: "21"
 
 1.21.1:
+  release_build: "true"
   neoforge_version: "21.1.209"
   architectury_version: "13.0.8"
   kotlin_for_forge_version: "5.10.0"
   fabric_loader_version: "0.16.5"
-  fabric_api_version: "0.92.6+1.20.1"
+  fabric_api_version: "0.116.12+1.21.1"
   fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
+  fabric_minecraft_dependency: ">=1.21 <1.21.2"
+  neoforge_minecraft_version_range: "[1.21,1.21.2)"
   jvm_version: "21"
+
+26.1:
+  release_build: "true"
+  neoforge_version: "26.1.0.19-beta"
+  architectury_version: "20.0.5"
+  kotlin_for_forge_version: "6.2.0"
+  fabric_loader_version: "0.18.5"
+  fabric_api_version: "0.145.1+26.1"
+  fabric_kotlin_version: "1.13.4+kotlin.2.2.0"
+  fabric_minecraft_dependency: ">=26.1 <26.2"
+  neoforge_minecraft_version_range: "[26.1,26.2)"
+  mojang_mappings: "false"
+  jvm_version: "25"
+  kotlin_jvm_target: "24"

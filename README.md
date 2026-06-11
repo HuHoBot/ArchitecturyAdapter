@@ -53,8 +53,15 @@
 
 ### 环境要求
 
-- Java `17+` Runtime
+- Java `17+` Runtime（Minecraft `1.20.5+` 需要 Java `21+`，`26.1+` 需要 Java `25+`）
 - **Forge/Fabric/NeoForge(1.20.1+) 核心**
+
+### 构建产物
+
+- `./gradlew customBuild "-Pminecraft_version=1.20.4"`：构建指定 Minecraft 版本对应的平台产物。
+- `./gradlew buildReleaseVersions`：按 `versions-matrix.yaml` 构建发布兼容基线，产物输出到 `outputs/`。
+- `./gradlew buildAllMatrixVersions`：调试用，逐个构建矩阵内所有精确 Minecraft 版本。
+- 当前发布基线：Fabric `1.20.1-1.20.4`、Forge `1.20.1-1.20.3`、NeoForge `1.20.4`、Fabric/NeoForge `1.20.5-1.20.6`、Fabric/NeoForge `1.21-1.21.1`、Fabric/NeoForge `26.1-26.1.2`。
 
 ### 快速开始
 

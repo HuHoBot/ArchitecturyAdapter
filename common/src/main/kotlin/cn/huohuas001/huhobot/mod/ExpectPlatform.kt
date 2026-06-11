@@ -1,18 +1,32 @@
 package cn.huohuas001.huhobot.mod
 
-import dev.architectury.injectables.annotations.ExpectPlatform
 import java.nio.file.Path
 
+interface PlatformHooks {
+    fun getConfigDirectory(): Path
+
+    fun getModVersion(modId: String): String
+}
+
 object ExpectPlatform {
+    private var platformHooks: PlatformHooks? = null
+
     @JvmStatic
-    @ExpectPlatform
-    fun getConfigDirectory(): Path {
-        throw AssertionError()
+    fun register(hooks: PlatformHooks) {
+        platformHooks = hooks
     }
 
     @JvmStatic
-    @ExpectPlatform
-    fun getModVersion(modId: String): String{
-        throw AssertionError()
+    fun getConfigDirectory(): Path {
+        return hooks().getConfigDirectory()
+    }
+
+    @JvmStatic
+    fun getModVersion(modId: String): String {
+        return hooks().getModVersion(modId)
+    }
+
+    private fun hooks(): PlatformHooks {
+        return platformHooks ?: error("Platform hooks are not registered")
     }
 }

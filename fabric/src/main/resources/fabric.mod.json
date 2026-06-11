@@ -20,8 +20,8 @@
     ]
   },
   "depends": {
-    "fabric": "*",
-    "minecraft": ">=1.20.1",
-    "architectury": ">=9.1.12"
+    "minecraft": "${fabric_minecraft_dependency}",
+    "architectury": ">=${architectury_version}",
+    "fabric-language-kotlin": ">=${fabric_kotlin_version}"
   }
 }

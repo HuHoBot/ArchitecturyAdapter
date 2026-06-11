@@ -2,23 +2,22 @@
 package cn.huohuas001.huhobot.mod.fabric
 
 import cn.huohuas001.huhobot.mod.ExpectPlatform
+import cn.huohuas001.huhobot.mod.PlatformHooks
 import net.fabricmc.loader.api.FabricLoader
 import java.nio.file.Path
 
-object ExpectPlatformImpl{
+object ExpectPlatformImpl : PlatformHooks {
     /**
      * This is our actual method to [ExpectPlatform.getConfigDirectory].
      */
-    @JvmStatic // Jvm Static is required so that java can access it
-    fun getConfigDirectory(): Path {
+    override fun getConfigDirectory(): Path {
         return FabricLoader.getInstance().configDir
     }
 
     /**
      * This is our actual method to [ExpectPlatform.getModVersion].
      */
-    @JvmStatic // Jvm Static is required so that java can access it
-    fun getModVersion(modId: String): String {
+    override fun getModVersion(modId: String): String {
         val modContainer = FabricLoader.getInstance().getModContainer(modId)
         if (modContainer.isPresent) {
             val metadata = modContainer.get().metadata
