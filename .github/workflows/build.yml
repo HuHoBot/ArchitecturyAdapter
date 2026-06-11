@@ -48,6 +48,7 @@ jobs:
           cp outputs/HuHoBot-${VERSION}-Forge-1.20.1.jar "release/HuHoBot-${VERSION}-Forge-1.20.1-1.20.4.jar"
           
 
+
       # Build 1.20.4 (NeoForge)
       - name: Build 1.20.4 (Fabric + NeoForge)
         env:
