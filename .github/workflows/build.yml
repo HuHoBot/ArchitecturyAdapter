@@ -2,10 +2,22 @@ name: Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main", "dev" ]
+    paths:
+      - '.github/workflows/build.yml'
+      - 'common/src/**'
+      - 'fabric/**'
+      - 'forge/**'
+      - 'neoforge/**'
+      - 'build.gradle.kts'
+    tags:
+      - 'v*' # 匹配 v 开头的标签
   pull_request:
-    branches: [ main ]
-  workflow_dispatch:
+    paths:
+      - '.github/workflows/build.yml'
+      - 'common/src/**'
+      - 'server/**'
+      - 'build.gradle.kts'
 
 jobs:
   build:
