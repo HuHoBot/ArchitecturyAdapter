@@ -449,8 +449,9 @@ fun registerMinecraftBuildTask(
         }
         workingDir = rootDir
         val targetJvmVersion = versionMatrix[targetMinecraftVersion]?.get("jvm_version")?.toIntOrNull() ?: 17
+        val gradleRuntimeJvmVersion = targetJvmVersion.coerceAtLeast(21)
         val javaLauncher = javaToolchains.launcherFor {
-            languageVersion = JavaLanguageVersion.of(targetJvmVersion)
+            languageVersion = JavaLanguageVersion.of(gradleRuntimeJvmVersion)
         }
         doFirst {
             val javaHome = javaLauncher.get().metadata.installationPath.asFile

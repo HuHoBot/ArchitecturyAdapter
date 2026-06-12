@@ -21,7 +21,14 @@ jobs:
         with:
           distribution: temurin
           java-version: |
+            17
+            21
             25
+
+      - name: Use Java 21 for Gradle runtime
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -44,21 +51,40 @@ jobs:
         run: |
           mkdir -p release
           VERSION=${{ steps.version.outputs.mod_version }}
-          cp outputs/HuHoBot-${VERSION}-Fabric-1.20.1.jar "release/HuHoBot-${VERSION}-Fabric-1.20.1-1.20.4.jar"
+          cp outputs/HuHoBot-${VERSION}-Fabric-1.20.1.jar "release/HuHoBot-${VERSION}-Fabric-1.20.1-1.21.11.jar"
           cp outputs/HuHoBot-${VERSION}-Forge-1.20.1.jar "release/HuHoBot-${VERSION}-Forge-1.20.1-1.20.3.jar"
-          cp outputs/HuHoBot-${VERSION}-NeoForge-1.20.4.jar "release/HuHoBot-${VERSION}-NeoForge-1.20.4.jar"
-          cp outputs/HuHoBot-${VERSION}-Fabric-1.20.5.jar "release/HuHoBot-${VERSION}-Fabric-1.20.5-1.20.6.jar"
-          cp outputs/HuHoBot-${VERSION}-NeoForge-1.20.5.jar "release/HuHoBot-${VERSION}-NeoForge-1.20.5-1.20.6.jar"
-          cp outputs/HuHoBot-${VERSION}-Fabric-1.21.1.jar "release/HuHoBot-${VERSION}-Fabric-1.21-1.21.1.jar"
-          cp outputs/HuHoBot-${VERSION}-NeoForge-1.21.1.jar "release/HuHoBot-${VERSION}-NeoForge-1.21-1.21.1.jar"
-          cp outputs/HuHoBot-${VERSION}-Fabric-26.1.jar "release/HuHoBot-${VERSION}-Fabric-26.1-26.1.2.jar"
-          cp outputs/HuHoBot-${VERSION}-NeoForge-26.1.jar "release/HuHoBot-${VERSION}-NeoForge-26.1-26.1.2.jar"
+          cp outputs/HuHoBot-${VERSION}-NeoForge-1.20.4.jar "release/HuHoBot-${VERSION}-NeoForge-1.20.4-1.21.11.jar"
+          cp outputs/HuHoBot-${VERSION}-Fabric-26.1.jar "release/HuHoBot-${VERSION}-Fabric-26.1+.jar"
+          cp outputs/HuHoBot-${VERSION}-NeoForge-26.1.jar "release/HuHoBot-${VERSION}-NeoForge-26.1+.jar"
+          ls -lh release
 
-      - name: Upload artifacts
+      - name: Upload all artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-artifacts
-          path: release/
+          name: HuHoBot-all
+          path: release/*.jar
+          if-no-files-found: error
+
+      - name: Upload Fabric artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: HuHoBot-fabric
+          path: release/*-Fabric-*.jar
+          if-no-files-found: error
+
+      - name: Upload Forge artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: HuHoBot-forge
+          path: release/*-Forge-*.jar
+          if-no-files-found: error
+
+      - name: Upload NeoForge artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: HuHoBot-neoforge
+          path: release/*-NeoForge-*.jar
+          if-no-files-found: error
 
   release:
     name: Create Release
@@ -107,7 +133,7 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-artifacts
+          name: HuHoBot-all
           path: artifacts
 
       - name: Setup workspace
