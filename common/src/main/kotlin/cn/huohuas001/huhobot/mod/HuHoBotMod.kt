@@ -164,7 +164,7 @@ object HuHoBotMod: HuHoBot {
     }
 
     override fun getPluginVersion(): String {
-        return "0.0.0"
+        return ExpectPlatform.getModVersion(MOD_ID)
     }
 
     override fun getCallbackConvertImg(): Int {
