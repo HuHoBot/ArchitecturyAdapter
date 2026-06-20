@@ -1,10 +1,6 @@
-# HuHoBot-ArchitecturyAdapter-Adapter v1.0.5
+# HuHoBot-ArchitecturyAdapter-Adapter v2.0.6
 
-### Added
-- 新增`CommandOutputAppender`用于捕获命令输出
-- 添加过滤`正则表达式`配置项用于清理日志输出
-- 新增查在线`Markdown`配置
-- 新增`26.1`以上的`Minecraft`适配
+feat(core): 添加玩家进出服务器事件推送功能
 
-### Fixed
-- 修复部分情况下配置文件初始化异常的问题
+- 在 ClientManager 中新增 postCustomChat 方法用于发送自定义消息
+- 实现玩家加入和离开时向机器人发送自定义格式消息

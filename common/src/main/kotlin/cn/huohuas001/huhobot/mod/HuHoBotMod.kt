@@ -8,6 +8,7 @@ import cn.huohuas001.bot.provider.ChatFormat
 import cn.huohuas001.bot.provider.Motd
 import cn.huohuas001.bot.provider.HExecution
 import cn.huohuas001.bot.tools.Cancelable
+import cn.huohuas001.huhobot.mod.events.PlayerEvents
 import cn.huohuas001.huhobot.mod.events.QueryAllowList
 import cn.huohuas001.huhobot.mod.events.QueryOnline
 import cn.huohuas001.huhobot.mod.managers.CommandManager
@@ -16,6 +17,7 @@ import cn.huohuas001.huhobot.mod.tools.HuHoBotScheduler
 import dev.architectury.event.EventResult
 import dev.architectury.event.events.common.ChatEvent
 import dev.architectury.event.events.common.LifecycleEvent
+import dev.architectury.event.events.common.PlayerEvent
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
@@ -27,6 +29,7 @@ import java.util.concurrent.CompletableFuture
 object HuHoBotMod: HuHoBot {
     const val MOD_ID: String = "huhobot"
     val LOGGER: Logger = LogManager.getLogger(MOD_ID)
+    val playerEvents = PlayerEvents()
     lateinit var config: ConfigManager
     lateinit var serverInstance: MinecraftServer
     lateinit var commandManager: CommandManager
@@ -36,22 +39,35 @@ object HuHoBotMod: HuHoBot {
     override var bindRequestObj = BindRequest()
     override var eventList:MutableMap<String, BaseEvent> = HashMap<String, BaseEvent>()
 
-    fun onChatEvent(player:ServerPlayer , component:Component): EventResult{
-        val componentString = component.string
-        ClientManager.postChat(player.name.string,componentString)
-        return EventResult.pass()
-    }
 
     fun reloadBotConfig(){
         config.reloadConfig()
         loadCustomCommand()
     }
 
+    fun regGameEvent(){
+        //注册服务器聊天事件
+        ChatEvent.RECEIVED.register {
+            player, component -> player?.let {
+                playerEvents.onChatEvent(it, component)
+            }
+        }
+
+        //注册玩家加入事件
+        PlayerEvent.PLAYER_JOIN.register {
+            player ->  playerEvents.onPlayerJoin(player)
+        }
+
+        //注册玩家离开事件
+        PlayerEvent.PLAYER_QUIT.register {
+            player ->  playerEvents.onPlayerLeft(player)
+        }
+    }
+
     fun init(){
         config = ConfigManager(this)
 
-        //注册服务器聊天事件
-        ChatEvent.RECEIVED.register { player, component -> player?.let { onChatEvent(it, component) } }
+        regGameEvent()
 
         LifecycleEvent.SERVER_STARTED.register {
             serverInstance = it

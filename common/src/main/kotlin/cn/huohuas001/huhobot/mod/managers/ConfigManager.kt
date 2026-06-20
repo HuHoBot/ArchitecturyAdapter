@@ -25,7 +25,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
     private val configFile: File
     private var config: MutableMap<String, Any> = mutableMapOf()
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 2
+        private const val CURRENT_CONFIG_VERSION = 3
         private const val DEFAULT_CONFIG_RESOURCE = "huhobot/config.yml"
         private val FALLBACK_DEFAULT_CONFIG = """
             serverId: null
@@ -47,6 +47,14 @@ class ConfigManager(private val mod: HuHoBotMod) {
               markdown: true
               customMarkdown: false
 
+            postEvent:
+              onJoin:
+                enable: false
+                formatString: 玩家 {playerName} 加入了服务器
+              onLeft:
+                enable: false
+                formatString: 玩家 {playerName} 离开了服务器
+
             whiteList:
               add: "whitelist add {name}"
               del: "whitelist remove {name}"
@@ -64,7 +72,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
             filterRegex:
               - '\u001B\[[;\d]*[ -/]*[@-~]'
 
-            version: 2
+            version: 3
         """.trimIndent()
     }
 
@@ -187,6 +195,16 @@ class ConfigManager(private val mod: HuHoBotMod) {
             }
             if (getConfigValueByPath("filterRegex") == null) {
                 setConfigValueByPath("filterRegex", listOf("\u001B\\[[;\\d]*[ -/]*[@-~]"))
+            }
+        }
+
+        if (oldVersion < 3) {
+            // 从版本2升级到版本3：新增 postEvent 配置
+            if (getConfigValueByPath("postEvent.onJoin.enable") == null) {
+                setConfigValueByPath("postEvent.onJoin.enable", false)
+            }
+            if (getConfigValueByPath("postEvent.onLeft.enable") == null) {
+                setConfigValueByPath("postEvent.onLeft.enable", false)
             }
         }
     }
@@ -465,5 +483,14 @@ class ConfigManager(private val mod: HuHoBotMod) {
 
     fun getRawConfig(): Map<String, Any> {
         return config.toMap()
+    }
+
+    // ------------------------------ PostEvent 配置 ------------------------------
+    fun getPostEventEnable(eventType: String): Boolean {
+        return getBoolean("postEvent.$eventType.enable", false)
+    }
+
+    fun getPostEventFormat(eventType: String): String {
+        return getString("postEvent.$eventType.formatString", "")
     }
 }
