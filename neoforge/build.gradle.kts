@@ -111,6 +111,7 @@ if (isAtLeast1204) {
         exclude("META-INF/*.kotlin_module")
         exclude("org/slf4j/**")
         exclude("META-INF/services/org.slf4j.*")
+        exclude("_COROUTINE/**")
         configurations = listOf(shadowCommon)
         
         relocate("kotlinx.coroutines", "huhobot.shadow.kotlinx.coroutines")

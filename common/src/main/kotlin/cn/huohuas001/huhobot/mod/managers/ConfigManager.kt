@@ -25,7 +25,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
     private val configFile: File
     private var config: MutableMap<String, Any> = mutableMapOf()
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 3
+        private const val CURRENT_CONFIG_VERSION = 4
         private const val DEFAULT_CONFIG_RESOURCE = "huhobot/config.yml"
         private val FALLBACK_DEFAULT_CONFIG = """
             serverId: null
@@ -40,7 +40,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
             motd:
               server_ip: "play.hypixel.net"
               server_port: 25565
-              api: "https://motdbe.blackbe.work/status_img/java?host={server_ip}:{server_port}"
+              api: "http://motd.txssb.cn/api/app_img?ip={server_ip}&port={server_port}&dark=true&lang=zh-CN"
               text: "共{online}人在线"
               output_online_list: true
               post_img: true
@@ -71,8 +71,10 @@ class ConfigManager(private val mod: HuHoBotMod) {
 
             filterRegex:
               - '\u001B\[[;\d]*[ -/]*[@-~]'
+              
+            serverName: "Server"
 
-            version: 3
+            version: 4
         """.trimIndent()
     }
 
@@ -205,6 +207,12 @@ class ConfigManager(private val mod: HuHoBotMod) {
             }
             if (getConfigValueByPath("postEvent.onLeft.enable") == null) {
                 setConfigValueByPath("postEvent.onLeft.enable", false)
+            }
+        }
+
+        if (oldVersion < 4) {
+            if (getConfigValueByPath("serverName") == null) {
+                setConfigValueByPath("serverName", "Server")
             }
         }
     }

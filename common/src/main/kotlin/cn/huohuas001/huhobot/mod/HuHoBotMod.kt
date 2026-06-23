@@ -147,7 +147,7 @@ object HuHoBotMod: HuHoBot {
         config.setServerId(serverId)
     }
 
-    override fun getHashKey(): String? {
+    override fun getHashKey(): String {
         return config.getHashKey()
     }
 
