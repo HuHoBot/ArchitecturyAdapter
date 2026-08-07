@@ -1,5 +1,6 @@
 serverId: null
 hashKey: null
+connectUrl: "native"
 
 chatFormat:
   from_game: "<{name}> {msg}"
@@ -42,4 +43,4 @@ customCommand:
 filterRegex:
   - '\u001B\[[;\d]*[ -/]*[@-~]'
 
-version: 3
+version: 5

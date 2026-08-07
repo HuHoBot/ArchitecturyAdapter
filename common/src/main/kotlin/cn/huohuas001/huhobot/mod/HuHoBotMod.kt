@@ -163,6 +163,10 @@ object HuHoBotMod: HuHoBot {
         return "architectury"
     }
 
+    override fun getConnectUrl(): String {
+        return config.getConnectUrl()
+    }
+
     override fun getPluginVersion(): String {
         return ExpectPlatform.getModVersion(MOD_ID)
     }

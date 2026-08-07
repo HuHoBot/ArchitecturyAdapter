@@ -25,11 +25,12 @@ class ConfigManager(private val mod: HuHoBotMod) {
     private val configFile: File
     private var config: MutableMap<String, Any> = mutableMapOf()
     companion object {
-        private const val CURRENT_CONFIG_VERSION = 4
+        private const val CURRENT_CONFIG_VERSION = 5
         private const val DEFAULT_CONFIG_RESOURCE = "huhobot/config.yml"
         private val FALLBACK_DEFAULT_CONFIG = """
             serverId: null
             hashKey: null
+            connectUrl: "native"
 
             chatFormat:
               from_game: "<{name}> {msg}"
@@ -74,7 +75,7 @@ class ConfigManager(private val mod: HuHoBotMod) {
               
             serverName: "Server"
 
-            version: 4
+            version: 5
         """.trimIndent()
     }
 
@@ -215,6 +216,13 @@ class ConfigManager(private val mod: HuHoBotMod) {
                 setConfigValueByPath("serverName", "Server")
             }
         }
+
+        if (oldVersion < 5) {
+            // 从版本4升级到版本5：新增 connectUrl 配置
+            if (getConfigValueByPath("connectUrl") == null) {
+                setConfigValueByPath("connectUrl", "native")
+            }
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -350,7 +358,12 @@ class ConfigManager(private val mod: HuHoBotMod) {
         saveConfig() // 立即保存
     }
 
-    // 2. serverId相关
+    // 2. connectUrl相关（默认为"native"，使用内置地址；填写自定义ws地址则使用该地址连接）
+    fun getConnectUrl(): String {
+        return getString("connectUrl", "native")
+    }
+
+    // 3. serverId相关
     fun getServerId(): String {
         var serverId = getString("serverId", "")
         if(serverId == ""){
